@@ -2,6 +2,10 @@ import { Router } from 'express'
 import { supabaseAdmin } from '../lib/supabaseAdmin.js'
 import { authenticate } from '../middleware/auth.js'
 import { asyncHandler } from '../lib/asyncHandler.js'
+import { lookupProduct, parseProductId } from '../lib/catalog.js'
+
+const MAX_MESSAGE_LENGTH = 2000
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const router = Router()
 router.use(authenticate)
@@ -33,11 +37,12 @@ function shapeConversation(row, userId, nameMap, preview) {
 // the client uses (that existed to work around the client's own restricted
 // RLS access to `profiles`) — the service-role key already sees every row.
 async function loadConversationsForUser(userId) {
-  const { data: rows } = await supabaseAdmin
+  const { data: rows, error } = await supabaseAdmin
     .from('conversations')
     .select('id, buyer_id, seller_id, last_message_at, buyer_last_read_at, seller_last_read_at')
     .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`)
     .order('last_message_at', { ascending: false })
+  if (error) throw error
 
   const otherIds = [...new Set((rows ?? []).map((r) => (r.buyer_id === userId ? r.seller_id : r.buyer_id)))]
   const nameMap = {}
@@ -76,8 +81,18 @@ router.post(
   '/',
   asyncHandler(async (req, res) => {
     const sellerId = req.body.sellerId
-    if (!sellerId) return res.status(400).json({ error: 'sellerId is required' })
+    if (typeof sellerId !== 'string' || !UUID_RE.test(sellerId)) {
+      return res.status(400).json({ error: 'sellerId is required' })
+    }
     if (sellerId === req.userId) return res.status(400).json({ error: "Can't message yourself" })
+
+    const { data: seller, error: sellerError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, is_seller')
+      .eq('id', sellerId)
+      .maybeSingle()
+    if (sellerError) return res.status(500).json({ error: sellerError.message })
+    if (!seller?.is_seller) return res.status(404).json({ error: 'Seller not found' })
 
     const { data, error } = await supabaseAdmin
       .from('conversations')
@@ -93,11 +108,14 @@ router.post(
 
 // Every /:id route below requires the caller to be a participant.
 const requireParticipant = asyncHandler(async (req, res, next) => {
-  const { data } = await supabaseAdmin
+  const id = Number(req.params.id)
+  if (!Number.isSafeInteger(id) || id <= 0) return res.status(404).json({ error: 'Conversation not found' })
+  const { data, error } = await supabaseAdmin
     .from('conversations')
     .select('id, buyer_id, seller_id, buyer_last_read_at, seller_last_read_at')
-    .eq('id', req.params.id)
-    .single()
+    .eq('id', id)
+    .maybeSingle()
+  if (error) return res.status(500).json({ error: error.message })
   if (!data || (data.buyer_id !== req.userId && data.seller_id !== req.userId)) {
     return res.status(404).json({ error: 'Conversation not found' })
   }
@@ -113,7 +131,7 @@ router.get(
     const { data, error } = await supabaseAdmin
       .from('messages')
       .select('*')
-      .eq('conversation_id', req.params.id)
+      .eq('conversation_id', req.conversation.id)
       .order('created_at', { ascending: true })
     if (error) return res.status(500).json({ error: error.message })
     res.json(data ?? [])
@@ -128,22 +146,32 @@ router.post(
   '/:id/messages',
   requireParticipant,
   asyncHandler(async (req, res) => {
-    const text = (req.body.body || '').trim()
+    const text = typeof req.body?.body === 'string' ? req.body.body.trim() : ''
     if (!text) return res.status(400).json({ error: 'Message body is required' })
+    if (text.length > MAX_MESSAGE_LENGTH) {
+      return res.status(400).json({ error: `Messages can be at most ${MAX_MESSAGE_LENGTH} characters` })
+    }
+
+    // The "Re: <product>" label comes from the real product, not the client.
+    const productId = parseProductId(req.body?.productId)
+    const product = productId ? await lookupProduct(productId) : null
 
     const isBuyer = req.conversation.buyer_id === req.userId
     const payload = {
-      conversation_id: req.params.id,
+      conversation_id: req.conversation.id,
       sender_id: req.userId,
       body: text,
-      ...(req.body.productId ? { product_id: req.body.productId, product_name: req.body.productName } : {}),
+      ...(product ? { product_id: product.id, product_name: product.name } : {}),
     }
     const { data: message, error } = await supabaseAdmin.from('messages').insert(payload).select().single()
     if (error) return res.status(400).json({ error: error.message })
 
     const column = isBuyer ? 'buyer_last_read_at' : 'seller_last_read_at'
     const now = new Date().toISOString()
-    await supabaseAdmin.from('conversations').update({ last_message_at: now, [column]: now }).eq('id', req.params.id)
+    await supabaseAdmin
+      .from('conversations')
+      .update({ last_message_at: now, [column]: now })
+      .eq('id', req.conversation.id)
 
     res.status(201).json(message)
   })
@@ -159,7 +187,7 @@ router.patch(
     const { error } = await supabaseAdmin
       .from('conversations')
       .update({ [column]: new Date().toISOString() })
-      .eq('id', req.params.id)
+      .eq('id', req.conversation.id)
     if (error) return res.status(400).json({ error: error.message })
     res.json({ ok: true })
   })

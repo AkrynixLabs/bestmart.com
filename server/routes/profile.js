@@ -2,30 +2,46 @@ import { Router } from 'express'
 import { supabaseAdmin } from '../lib/supabaseAdmin.js'
 import { authenticate } from '../middleware/auth.js'
 import { asyncHandler } from '../lib/asyncHandler.js'
+import { handleImageUpload, isHttpsUrl } from '../lib/imageUpload.js'
 
 const router = Router()
 router.use(authenticate)
 
-// profiles table (snake_case) <-> API body/response (camelCase) — same
-// mapping that used to live client-side in AuthContext.jsx.
-const FIELD_MAP = {
-  name: 'name',
-  email: 'email',
-  isSeller: 'is_seller',
-  businessName: 'business_name',
-  businessCategory: 'business_category',
-  businessAddress: 'business_address',
-  storeDescription: 'store_description',
-  businessLogo: 'business_logo',
-  phone: 'phone',
+// Editable text fields: API (camelCase) -> profiles column, with a max
+// length. `email` is deliberately absent — it's owned by Supabase Auth and
+// always written from the verified token, so a user can't display someone
+// else's address. `isSeller` is handled separately below.
+const TEXT_FIELDS = {
+  name: ['name', 100],
+  businessName: ['business_name', 120],
+  businessCategory: ['business_category', 60],
+  businessAddress: ['business_address', 200],
+  storeDescription: ['store_description', 1000],
+  businessLogo: ['business_logo', 2048],
+  phone: ['phone', 30],
 }
 
-function toRow(profile) {
+function validateProfileBody(body) {
   const row = {}
-  for (const [key, value] of Object.entries(profile)) {
-    if (FIELD_MAP[key]) row[FIELD_MAP[key]] = value
+  for (const [key, [column, maxLength]] of Object.entries(TEXT_FIELDS)) {
+    if (body[key] === undefined) continue
+    if (body[key] === null) {
+      row[column] = null
+      continue
+    }
+    if (typeof body[key] !== 'string') return { error: `${key} must be text` }
+    const value = body[key].trim()
+    if (value.length > maxLength) return { error: `${key} must be at most ${maxLength} characters` }
+    row[column] = value || null
   }
-  return row
+  if ('name' in row && !row.name) return { error: 'Name is required' }
+  if (row.business_logo && !isHttpsUrl(row.business_logo)) return { error: 'Upload the logo image first' }
+
+  if (body.isSeller !== undefined) {
+    if (typeof body.isSeller !== 'boolean') return { error: 'isSeller must be true or false' }
+    row.is_seller = body.isSeller
+  }
+  return { row }
 }
 
 function rowToUser(row) {
@@ -44,50 +60,81 @@ function rowToUser(row) {
   }
 }
 
+const defaultName = (email) => (email || 'user').split('@')[0]
+
+const metadataText = (value, maxLength) =>
+  typeof value === 'string' && value.trim() ? value.trim().slice(0, maxLength) : null
+
+// The first profile row for an account, using what the signup form stored
+// in user_metadata (see AuthContext.registerAccount) when available.
+function initialProfileRow(req) {
+  const meta = req.userMetadata || {}
+  return {
+    id: req.userId,
+    email: req.userEmail,
+    name: metadataText(meta.name, 100) || defaultName(req.userEmail),
+    business_name: metadataText(meta.businessName, 120),
+    is_seller: meta.isSeller === true,
+  }
+}
+
+async function findProfile(userId) {
+  const { data, error } = await supabaseAdmin.from('profiles').select('*').eq('id', userId).maybeSingle()
+  if (error) throw error
+  return data
+}
+
 // GET /api/profile — fetch own profile. Auto-creates a minimal default row
-// if one doesn't exist yet: on login, that's a first login after an
-// email-confirm signup (no session existed at signup time to create it
-// then); on signup, this same fallback can race against the
-// onAuthStateChange listener's own GET (both fire the instant signUp()
-// returns a session). An upsert (not a plain insert) makes that race
-// harmless — both calls converge on the same generic default row, and
-// registerAccount's follow-up PATCH fills in the real values afterward
-// regardless of which GET "won".
+// if one doesn't exist yet (first login after an email-confirm signup, when
+// no session existed at signup time to create it). Upsert with
+// ignoreDuplicates makes a race with a concurrent signup PATCH harmless: if
+// the PATCH's real values land first, they are kept, not overwritten.
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    let { data } = await supabaseAdmin.from('profiles').select('*').eq('id', req.userId).single()
-    if (!data) {
-      const row = { id: req.userId, name: req.userEmail.split('@')[0], email: req.userEmail, is_seller: false }
-      const { data: upserted, error } = await supabaseAdmin
+    let profile = await findProfile(req.userId)
+    if (!profile) {
+      const { error } = await supabaseAdmin
         .from('profiles')
-        .upsert(row, { onConflict: 'id' })
-        .select()
-        .single()
+        .upsert(initialProfileRow(req), { onConflict: 'id', ignoreDuplicates: true })
       if (error) return res.status(500).json({ error: error.message })
-      data = upserted
+      profile = await findProfile(req.userId)
     }
-    res.json(rowToUser(data))
+    res.json(rowToUser(profile))
   })
 )
 
 // PATCH /api/profile — create-or-update own profile in one call. Signup
-// calls this directly with the real submitted values (no preceding GET —
-// upsert makes a separate "does it exist yet" round trip unnecessary, and
-// one less client-side call means one less thing that can race the
-// onAuthStateChange listener's own concurrent profile fetch). Existing
-// callers doing a partial edit (Settings/Profile page) are safe too: their
-// target row is always guaranteed to exist already, so this always takes
-// the update path for them, just via upsert's merge-on-conflict instead of
-// a plain .update().
+// calls this directly with the submitted values; Settings/Profile call it
+// for partial edits.
 router.patch(
   '/',
   asyncHandler(async (req, res) => {
-    const row = { ...toRow(req.body), id: req.userId }
-    const { data, error } = await supabaseAdmin.from('profiles').upsert(row, { onConflict: 'id' }).select().single()
+    const { row, error: validationError } = validateProfileBody(req.body ?? {})
+    if (validationError) return res.status(400).json({ error: validationError })
+
+    const existing = await findProfile(req.userId)
+    const fullRow = {
+      // Defaults only matter when the row doesn't exist yet (name is NOT NULL).
+      ...(existing ? {} : initialProfileRow(req)),
+      ...row,
+      id: req.userId,
+      email: req.userEmail,
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .upsert(fullRow, { onConflict: 'id' })
+      .select()
+      .single()
     if (error) return res.status(400).json({ error: error.message })
     res.json(rowToUser(data))
   })
 )
+
+// POST /api/profile/logo — multipart `file`. Stores the image and returns
+// { url }; the client then saves that URL via PATCH /api/profile. Keeps
+// multi-megabyte images out of JSON bodies (express.json() caps at 100KB).
+router.post('/logo', ...handleImageUpload)
 
 export default router

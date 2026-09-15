@@ -18,25 +18,25 @@ router.get(
   asyncHandler(async (req, res) => {
     const { data, error } = await supabaseAdmin
       .from('orders')
-      .select('id, created_at, status, order_items(id, product_id, price, qty, snapshot, seller_id)')
+      // !inner: only orders that have at least one of this seller's items,
+      // with only those items embedded — filtered in the database.
+      .select('id, created_at, status, order_items!inner(id, product_id, price, qty, snapshot, seller_id)')
       .eq('order_items.seller_id', req.userId)
       .order('created_at', { ascending: false })
     if (error) return res.status(500).json({ error: error.message })
 
-    const shaped = (data ?? [])
-      .filter((o) => o.order_items.length > 0)
-      .map((o) => {
-        const items = o.order_items.map(rowToLineItem)
-        return {
-          id: o.id,
-          createdAt: o.created_at,
-          status: o.status,
-          items,
-          // Only this seller's share — a single checkout can include other
-          // sellers' products too.
-          total: items.reduce((sum, item) => sum + item.qty * item.price, 0),
-        }
-      })
+    const shaped = (data ?? []).map((o) => {
+      const items = o.order_items.map(rowToLineItem)
+      return {
+        id: o.id,
+        createdAt: o.created_at,
+        status: o.status,
+        items,
+        // Only this seller's share — a single checkout can include other
+        // sellers' products too.
+        total: items.reduce((sum, item) => sum + item.qty * Number(item.price), 0),
+      }
+    })
     res.json(shaped)
   })
 )
@@ -46,22 +46,26 @@ router.get(
 router.patch(
   '/orders/:id/status',
   asyncHandler(async (req, res) => {
-    const { data: myItems } = await supabaseAdmin
+    const orderId = Number(req.params.id)
+    if (!Number.isSafeInteger(orderId) || orderId <= 0) return res.status(404).json({ error: 'Order not found' })
+
+    const { data: myItems, error: itemsError } = await supabaseAdmin
       .from('order_items')
       .select('id')
-      .eq('order_id', req.params.id)
+      .eq('order_id', orderId)
       .eq('seller_id', req.userId)
       .limit(1)
+    if (itemsError) return res.status(500).json({ error: itemsError.message })
     if (!myItems || myItems.length === 0) return res.status(403).json({ error: 'Not your order' })
 
-    const { data: order } = await supabaseAdmin.from('orders').select('status').eq('id', req.params.id).single()
+    const { data: order } = await supabaseAdmin.from('orders').select('status').eq('id', orderId).maybeSingle()
     if (!order) return res.status(404).json({ error: 'Order not found' })
 
     const nextIndex = STATUS_FLOW.indexOf(order.status) + 1
     if (nextIndex >= STATUS_FLOW.length) return res.status(400).json({ error: 'Order is already delivered' })
     const nextStatus = STATUS_FLOW[nextIndex]
 
-    const { error } = await supabaseAdmin.from('orders').update({ status: nextStatus }).eq('id', req.params.id)
+    const { error } = await supabaseAdmin.from('orders').update({ status: nextStatus }).eq('id', orderId)
     if (error) return res.status(400).json({ error: error.message })
     res.json({ status: nextStatus })
   })
@@ -77,7 +81,7 @@ router.get(
     const rows = data ?? []
     res.json({
       orderCount: new Set(rows.map((r) => r.order_id)).size,
-      revenue: rows.reduce((sum, r) => sum + r.price * r.qty, 0),
+      revenue: Math.round(rows.reduce((sum, r) => sum + Number(r.price) * r.qty, 0) * 100) / 100,
     })
   })
 )

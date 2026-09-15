@@ -30,6 +30,9 @@ export const authenticate = asyncHandler(async (req, res, next) => {
 
   req.userId = data.user.id
   req.userEmail = data.user.email
+  // Set by the client at signUp — user-controlled, so only ever used as
+  // defaults for a brand-new profile (see routes/profile.js).
+  req.userMetadata = data.user.user_metadata || {}
   next()
 })
 
