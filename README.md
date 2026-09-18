@@ -1,8 +1,8 @@
 # BestMart
 
-BestMart is a responsive front-end for a Ghana-based multi-vendor marketplace, built with **React 19**, **Vite**, **Tailwind CSS v4**, and **React Router v7**. It lets everyday shoppers browse and buy products from independent sellers, and lets those sellers sign in to a dashboard to publish, advertise, and manage what they sell — matching the platform's tagline: **Publish · Advertise · Sell**.
+BestMart is a full-stack, Ghana-based multi-vendor marketplace: a **React 19** + **Vite** + **Tailwind CSS v4** + **React Router v7** front end, an **Express 5** API, and **Supabase** (Postgres, Auth, Storage, Realtime). It lets everyday shoppers browse and buy products from independent sellers, and lets those sellers sign in to a dashboard to publish, advertise, and manage what they sell — matching the platform's tagline: **Publish · Advertise · Sell**.
 
-This project was built as part of the **WomenTechsters** program to demonstrate practical front-end engineering skills: component architecture, authenticated vs. public routing, shared layout ("Wrapper") components, global state via Context, responsive design, form handling and validation, and a cohesive brand-driven design system.
+This project was built as part of the **WomenTechsters** program to demonstrate practical engineering skills: component architecture, a server-side API with real authorization, authenticated vs. public routing, shared layout ("Wrapper") components, global state via Context, responsive design, form handling and validation, and a cohesive brand-driven design system.
 
 ---
 
@@ -35,8 +35,8 @@ This project was built as part of the **WomenTechsters** program to demonstrate 
 
 BestMart has two faces:
 
-1. **The storefront** (public) — Home, Shop, Cart, About, Contact, Login, Signup. Anyone can browse products and add them to a cart without an account.
-2. **The seller dashboard** (authenticated) — Dashboard, My Products, Advertise, Orders, Settings, reachable only after logging in, and presented behind a sidebar navigation instead of the public navbar/footer.
+1. **The storefront** (public) — Shop (the home page), Cart, About, Contact, Login, Signup. Anyone can browse; adding to the cart and checking out require a free account. Signed-in shoppers also get a Profile with order history and Messages to chat with sellers.
+2. **The seller dashboard** (signed in **and** registered as a seller via `/sell`) — Dashboard, My Products, Advertise, Orders, Settings, presented behind a sidebar navigation instead of the public navbar/footer.
 
 Both faces share one design system, one routing table, and one set of reusable form/UI components — but each is wrapped in its own **layout** and gated by its own **route guard**, so the two experiences never bleed into each other by accident.
 
@@ -44,22 +44,17 @@ Both faces share one design system, one routing table, and one set of reusable f
 
 ## Features
 
-- 🏠 **Landing page** with hero section, feature highlights, a real-photo "Shop by Category" grid, and a seller-signup call-to-action band
-- 🛍️ **Shop page** (`/shop`) — category-filterable product grid backed by mock seller listings
-- 🛒 **Cart** (`/cart`) — add/remove items, adjust quantity, running total, all persisted to `localStorage`, with a live count badge in the navbar
-- 🔐 **Auth-aware navbar** — shows Log in/Sign up when logged out, a Dashboard link when logged in
-- 🔑 **Login / Signup** that establish a session (via Context + `localStorage`) and redirect into the dashboard
-- 🔓 **Forgot / Reset password** (`/forgot-password`, `/reset-password`) — a simulated, no-backend token flow: request a reset link, then set a new password from the link, with an explicit "invalid or expired" state for a missing/bad token
-- 📊 **Seller dashboard** (`/dashboard/*`) behind a sidebar layout — Dashboard overview, My Products, Advertise, Orders, Settings
-- 🚧 **Route protection** — dashboard routes redirect to `/login` when logged out; `/login` and `/signup` redirect to the dashboard when already logged in
-- ℹ️ **About page** with a real photo, company story, and key stats
-- ✉️ **Contact page** with a validated contact form and Ghana business details
-- 🧩 **Reusable form components** (`Input`, `TextArea`, `Button`) shared across every form
-- ✅ **Client-side validation** with per-field inline error messages
-- 📱 **Fully responsive** from small mobile screens up to large desktop viewports
-- 🎨 **Brand-driven design system** — navy, blue, and orange pulled directly from the BestMart logo
-- 🖼️ **Real photography** — category and story images, sourced from Pexels, replacing placeholder graphics
-- 🔖 **Branded tab title & favicon**, cropped from the logo mark
+- 🛍️ **Shop** (`/`) — hero, category slider, search, category filters, best sellers and flash-sale sections; the static demo catalog merged with real seller listings from the database
+- 🛒 **Cart & checkout** (`/cart`) — server-side cart per account; checkout re-prices every item from the live product and creates a real order
+- 🔑 **Real authentication** via Supabase Auth — signup (with strong-password policy and generator), login, logout, and an emailed forgot/reset-password flow
+- 🏪 **Become a seller** (`/sell`) — one form upgrades a shopper account (or creates a new one) into a seller account
+- 📦 **Seller dashboard** (`/dashboard/*`) — overview stats, My Products (create/edit/delete with photo uploads to Supabase Storage), Orders (advance Processing → Shipped → Delivered), Advertise (campaigns stored per seller in the browser), Settings (store details and logo)
+- 💬 **Real-time messaging** (`/messages`) — buyer ↔ seller chat with live delivery over Supabase Realtime and an unread indicator in the navbar
+- 👤 **Profile** (`/profile`) — personal details and order history
+- 🔐 **Server-side authorization** — every data request goes through the Express API, which verifies the Supabase token and enforces seller/owner rules
+- 🚧 **Route guards** — dashboard requires a seller account; profile/messages require sign-in; login/signup redirect away once signed in
+- 🧩 **Reusable form components** (`Input`, `TextArea`, `Button`) with inline validation errors
+- 📱 **Fully responsive**, brand-driven design (navy, blue and orange from the BestMart logo), real photography, branded favicon
 
 ---
 
@@ -71,9 +66,12 @@ Both faces share one design system, one routing table, and one set of reusable f
 | Build Tool | [Vite 8](https://vitejs.dev/) | Dev server + production bundling |
 | Styling | [Tailwind CSS v4](https://tailwindcss.com/) (via `@tailwindcss/vite`) | Utility-first styling, brand colors defined as CSS theme tokens |
 | Routing | [React Router v7](https://reactrouter.com/) | Client-side routing, nested layouts, route guards |
-| State | React Context API | `AuthContext` (session) and `CartContext` (shopping cart), each backed by `localStorage` |
+| State | React Context API | `AuthContext` (session + profile), `CartContext` (cart), `ProductsContext` (catalog) |
+| API | [Express 5](https://expressjs.com/) | `server/` — auth middleware, validation, all data reads/writes; runs as a Vercel serverless function |
+| Backend services | [Supabase](https://supabase.com/) | Postgres database, Auth (passwords, JWTs, email), Storage (product photos/logos), Realtime (chat) |
+| Uploads | [multer](https://github.com/expressjs/multer) | In-memory multipart parsing for image uploads |
 | Icons | [react-icons](https://react-icons.github.io/react-icons/) (`Hi`, `Hi2`, `Fa` icon sets) | Navigation, footer, and form iconography |
-| HTTP Client | [axios](https://axios-http.com/) | Installed and ready for future API integration |
+| HTTP Client | `fetch` (wrapped in `src/lib/apiClient.js`) | Adds the Supabase access token to every API call |
 | Language | JavaScript (JSX) | No TypeScript in this iteration |
 
 No CSS-in-JS, no component libraries (e.g. MUI, Chakra) — every visual element is composed from Tailwind utility classes and custom components.
@@ -84,101 +82,57 @@ No CSS-in-JS, no component libraries (e.g. MUI, Chakra) — every visual element
 
 ```
 bestmart/
-├── public/
-│   ├── favicon.ico              # Browser-tab icon, cropped from the logo mark
-│   ├── favicon-512.png
-│   └── apple-touch-icon.png
+├── api/
+│   ├── index.js                  # Vercel serverless entry — hands every /api/* request to Express
+│   └── health.js                 # Zero-dependency diagnostic endpoint (/api/health)
+├── server/
+│   ├── app.js                    # Express app: middleware, route mounting, error handling
+│   ├── dev.js                    # Local-only: runs app.js as a normal Node server on :3001
+│   ├── lib/
+│   │   ├── supabaseAdmin.js      # Service-role Supabase client (server only!)
+│   │   ├── catalog.js            # Authoritative product lookup (DB + demo catalog) for prices/sellers
+│   │   ├── imageUpload.js        # Shared image-upload middleware (type/size checks, Storage upload)
+│   │   └── asyncHandler.js
+│   ├── middleware/auth.js        # authenticate / loadProfile / requireSeller
+│   └── routes/                   # profile, products, cart, checkout, orders, seller, conversations
+├── supabase/migrations/          # SQL to run in the Supabase SQL editor, in order (001 → 007)
+├── public/                       # Favicons
 ├── src/
-│   ├── assets/
-│   │   ├── logo.png              # Full logo lockup (icon + wordmark), transparent background
-│   │   ├── logo-glow.png         # Dark "glow" variant of the logo, used as the homepage hero image
-│   │   ├── about-story.jpg       # Real photo used on the About page
-│   │   └── categories/           # One real photo per product category
-│   │       ├── groceries.jpg
-│   │       ├── electronics.jpg
-│   │       ├── fashion.jpg
-│   │       ├── home-living.jpg
-│   │       ├── beauty.jpg
-│   │       └── sports.jpg
-│   ├── context/
-│   │   ├── AuthContext.jsx       # Who's logged in — login()/logout(), persisted to localStorage
-│   │   └── CartContext.jsx       # Shopping cart state — add/remove/update, persisted to localStorage
-│   ├── data/
-│   │   ├── products.js           # Mock product catalog + category list
-│   │   └── categoryImages.js     # Maps each category name to its photo
-│   ├── layouts/
-│   │   ├── UnauthWrapper.jsx     # Public shell: Navbar + <Outlet /> + Footer
-│   │   └── AuthWrapper.jsx       # Dashboard shell: Sidebar + <Outlet />
-│   ├── routes/
-│   │   ├── routesConfig.js       # The single list of {path, element} for every page
-│   │   ├── AppRoutes.jsx         # Turns routesConfig into real <Route> elements via .map()
-│   │   ├── ProtectedRoute.jsx    # Blocks dashboard routes unless logged in
-│   │   └── GuestRoute.jsx        # Blocks /login + /signup once already logged in
-│   ├── components/
-│   │   ├── Navbar.jsx            # Public top navigation (auth-aware, cart badge)
-│   │   ├── Footer.jsx            # Public footer
-│   │   ├── Sidebar.jsx           # Dashboard side navigation + logout
-│   │   ├── ProductCard.jsx       # One product tile on the Shop page
-│   │   └── ui/
-│   │       ├── Button.jsx        # Reusable button (primary / accent / outline / ghost variants)
-│   │       ├── Input.jsx         # Reusable labeled text input with error state
-│   │       └── TextArea.jsx      # Reusable labeled textarea with error state
-│   ├── pages/
-│   │   ├── Home.jsx              # Landing page
-│   │   ├── Shop.jsx              # Product catalog with category filters
-│   │   ├── Cart.jsx              # Shopping cart
-│   │   ├── Login.jsx             # Login page
-│   │   ├── Signup.jsx            # Sign up page
-│   │   ├── ForgotPassword.jsx    # Request a password reset (simulated, no backend)
-│   │   ├── ResetPassword.jsx     # Set a new password from a reset token
-│   │   ├── About.jsx             # About page
-│   │   ├── Contact.jsx           # Contact page
-│   │   ├── NotFound.jsx          # Catch-all 404
-│   │   └── dashboard/
-│   │       ├── Dashboard.jsx     # Seller dashboard overview
-│   │       ├── Products.jsx      # My Products (placeholder)
-│   │       ├── Advertise.jsx     # Advertise (placeholder)
-│   │       ├── Orders.jsx        # Orders (placeholder)
-│   │       ├── Settings.jsx      # Settings (placeholder)
-│   │       └── ComingSoon.jsx    # Shared "coming soon" placeholder UI
-│   ├── App.jsx                   # <AuthProvider><CartProvider><AppRoutes /></CartProvider></AuthProvider>
-│   ├── main.jsx                  # App entry point (mounts <BrowserRouter>)
-│   └── index.css                 # Tailwind entry point + brand color theme tokens
-├── index.html                    # Vite HTML entry point (tab title + favicon links)
-├── tailwind.config.js
-├── vite.config.js
-├── postcss.config.js
-├── package.json
-└── README.md
+│   ├── assets/                   # Logo variants, About photo, one photo per category
+│   ├── components/               # Navbar, Footer, Sidebar, ProductCard, ui/ (Button, Input, TextArea)
+│   ├── context/                  # AuthContext, CartContext, ProductsContext
+│   ├── data/                     # Demo catalog + categories (also used by the server), category images
+│   ├── hooks/                    # useUnreadMessages, useLocalStorageList
+│   ├── layouts/                  # UnauthWrapper (navbar + footer), AuthWrapper (sidebar)
+│   ├── lib/                      # supabaseClient (Auth + Realtime only), apiClient (calls /api)
+│   ├── pages/                    # Shop, Cart, Login, Signup, SellerSignup, Forgot/ResetPassword,
+│   │   │                         # Profile, Messages, About, Contact, HelpCenter, NotFound
+│   │   └── dashboard/            # Dashboard, Products, Advertise, Orders, Settings
+│   ├── routes/                   # routesConfig, AppRoutes, ProtectedRoute, AccountRoute, GuestRoute
+│   └── utils/                    # passwordPolicy, productImages, orderLineItems, money
+├── vercel.json                   # SPA + /api rewrites
+├── vite.config.js                # Proxies /api to the local Express server in dev
+└── .env.example                  # Required environment variables
 ```
 
 ---
 
 ## Pages
 
-### `/` — Home
-1. **Hero** — headline, supporting copy, "Shop Now" (buyers) and "Sell on BestMart" (sellers) calls-to-action, and the logo-glow brand image.
-2. **Feature highlights** — Fast Delivery, Secure Payments, Best Prices, 24/7 Support.
-3. **Shop by category** — real photos for all six categories, each linking into `/shop`.
-4. **Seller call-to-action band** — prompts account creation, linking to `/signup`.
-
-### `/shop` — Shop
-A filterable grid of products (mock data in `src/data/products.js`), each card showing a category photo, name, seller, price in ₵ (Ghana cedi), and an **Add** button that pushes the item into the cart.
+### `/` — Shop (home)
+Hero, category slider, search, category filters, best sellers and a flash-sale section. Products are the static demo catalog (`src/data/products.js`, ids 1–12) merged with real seller listings from the database (ids from 1000). Each card shows photos, seller, price in ₵ and buttons to add to cart or message the seller.
 
 ### `/cart` — Cart
-Lists everything added from the Shop page: quantity stepper, remove button, running total, and a Checkout button (UI only — no payment integration yet).
+The signed-in user's server-side cart: quantity input, remove, running total, and **Checkout**, which creates a real order (no payment integration yet).
 
-### `/login` — Login
-Email/password form. On successful validation it calls `login()` from `AuthContext` and redirects to `/dashboard` (or back to whatever protected page the user originally tried to visit).
+### `/login`, `/signup`, `/sell`
+Supabase Auth sign-in and sign-up. `/sell` creates a seller account, or upgrades the signed-in shopper's account by adding a shop name. If the Supabase project requires email confirmation, the signup details are kept in the account's metadata and the profile is created on first login.
 
-### `/signup` — Sign Up
-Full name, email, password + confirm password, and a required terms checkbox. On success it logs the new user in and redirects straight to `/dashboard`.
+### `/forgot-password` → `/reset-password`
+Supabase emails a reset link; opening it signs the user in with a short-lived recovery session, and `/reset-password` lets them choose a new password. Expired or used links show an explicit "invalid or expired" state.
 
-### `/forgot-password` — Forgot Password
-Email form. Since there's no backend, submitting it fabricates a reset token and stores it in `localStorage` alongside the email, then shows a success panel with a "Continue to reset password" link standing in for the emailed link.
-
-### `/reset-password` — Reset Password
-Reads `?token=` from the URL (`useSearchParams`) and checks it against the token saved by Forgot Password. A valid token shows a new-password + confirm form that, on success, clears the token and redirects to `/login`. A missing/invalid token shows an explicit "link is invalid or has expired" state with a link back to Forgot Password, instead of silently accepting a bad link.
+### `/profile` and `/messages` (signed in)
+Profile shows personal details and order history. Messages is a real-time chat between buyers and sellers, opened from a product's "Message seller" button.
 
 ### `/about` — About
 A dark hero banner, a real photo paired with the company story, and key stats (Happy Customers, Products Listed, Trusted Sellers, Cities Served).
@@ -187,7 +141,7 @@ A dark hero banner, a real photo paired with the company story, and key stats (H
 A dark hero banner, a Ghana business-details sidebar (Accra address, `+233` phone, email), and a validated contact form.
 
 ### `/dashboard` and `/dashboard/*` — Seller Dashboard (protected)
-Only reachable when logged in. `/dashboard` shows stat tiles (Products Listed, Active Ads, Orders, Revenue) and a prompt to add a product. `/dashboard/products`, `/advertise`, `/orders`, `/settings` are placeholder pages sharing the same sidebar layout, ready to be built out.
+Only reachable by signed-in sellers. `/dashboard` shows stat tiles (Products Listed, Active Ads, Orders, Revenue). `/dashboard/products` manages the seller's own listings with photo uploads, `/orders` lists orders containing their products and advances their status, `/advertise` manages ad campaigns (stored in the browser for now), and `/settings` edits store details and the logo.
 
 ### `*` — Not Found
 Any unmatched URL renders a simple 404 page with a link back home.
@@ -199,7 +153,7 @@ Any unmatched URL renders a simple 404 page with a link back home.
 Two components exist purely to wrap shared UI around whichever page is currently active — the pattern requested for this build:
 
 ### `layouts/UnauthWrapper.jsx`
-Renders `Navbar` + `<Outlet />` + `Footer`. Every public route (`/`, `/shop`, `/cart`, `/about`, `/contact`, `/login`, `/signup`) is nested under this layout in `AppRoutes.jsx`, so they all get the same navbar and footer without importing them individually.
+Renders `Navbar` + `<Outlet />` + `Footer`. Every non-dashboard route (`/`, `/cart`, `/about`, `/contact`, `/login`, `/signup`, `/profile`, `/messages`, …) is nested under this layout in `AppRoutes.jsx`, so they all get the same navbar and footer without importing them individually.
 
 ### `layouts/AuthWrapper.jsx`
 Renders `Sidebar` + `<Outlet />`. Every dashboard route is nested under this layout instead, giving the authenticated area a completely different shell (no public navbar/footer) with zero duplicated markup.
@@ -210,21 +164,19 @@ Renders `Sidebar` + `<Outlet />`. Every dashboard route is nested under this lay
 
 ## Authentication & Protected Routes
 
-`src/context/AuthContext.jsx` is the single source of truth for "who's logged in":
+Authentication is **Supabase Auth**: it hashes passwords, issues JWT access tokens and sends confirmation/reset emails. `src/context/AuthContext.jsx` wraps it:
 
-- `login(userData)` — stores the user and persists it to `localStorage`
-- `logout()` — clears both
-- `isAuthenticated` — derived boolean any component can read via the `useAuth()` hook
-- On app load, it re-hydrates the session from `localStorage` so refreshing the page doesn't log you out
+- `registerAccount()`, `authenticate()`, `logout()`, `updateUser()`
+- `user` — the profile from `GET /api/profile` (name, `isSeller`, store details); `isAuthenticated` and `loading` for the guards
+- A Supabase auth listener restores the session on page load and keeps tabs in sync (logging out in one tab logs out the others)
 
-Two tiny route components apply that condition to routing:
+**Authorization lives on the server.** The browser sends its access token as `Authorization: Bearer …`; `server/middleware/auth.js` verifies it with Supabase and sets `req.userId`, and `requireSeller` / ownership checks guard seller-only actions. The browser's public anon key is only used for Auth and for receiving Realtime events about its own conversations — after migration `007`, it can't write to any table directly.
 
-- **`routes/ProtectedRoute.jsx`** — wraps every dashboard route. Not logged in → `<Navigate to="/login" />` (and remembers where you were headed, so Login can send you back). Logged in → renders the nested route.
-- **`routes/GuestRoute.jsx`** — the mirror image, wrapping `/login` and `/signup`. Already logged in → bounced to `/dashboard`, so a logged-in user can't land back on the login screen.
+Three route components apply the conditions in the UI:
 
-The Navbar and Sidebar both read `isAuthenticated`/`user` from the same context, which is why the navbar swaps Login/Signup for a Dashboard link the moment you log in, and the Sidebar can greet you by name.
-
-> **Note:** There's no real backend yet — `login()` accepts any email/password that passes basic validation and fabricates a session client-side. See [Known Limitations](#known-limitations).
+- **`ProtectedRoute`** — dashboard routes. Signed out → `/login`; signed in but not a seller → `/sell`.
+- **`AccountRoute`** — `/profile`, `/messages`. Signed out → `/login`.
+- **`GuestRoute`** — `/login`, `/signup`, `/forgot-password`. Signed in → back to where they came from (or `/`).
 
 ---
 
@@ -236,26 +188,34 @@ Routing is handled by **React Router v7**, initialized in `main.jsx` with `<Brow
 
 ```js
 export const publicRoutes = [
-  { path: '/', element: Home },
-  { path: '/shop', element: Shop },
+  { path: '/', element: Shop },
   { path: '/cart', element: Cart },
   { path: '/about', element: About },
   { path: '/contact', element: Contact },
+  { path: '/sell', element: SellerSignup },
+  { path: '/reset-password', element: ResetPassword },
+  // ...
 ]
 
-export const guestRoutes = [
+export const guestRoutes = [   // signed-out only
   { path: '/login', element: Login },
   { path: '/signup', element: Signup },
   { path: '/forgot-password', element: ForgotPassword },
-  { path: '/reset-password', element: ResetPassword },
 ]
 
-export const privateRoutes = [
+export const accountRoutes = [ // signed in, any role
+  { path: '/profile', element: Profile },
+  { path: '/messages', element: Messages },
+]
+
+export const privateRoutes = [ // signed-in sellers
   { path: '/dashboard', element: Dashboard },
   { path: '/dashboard/products', element: Products },
   // ...
 ]
 ```
+
+Every page except the Shop is loaded on demand with `React.lazy`, and `AppRoutes` wraps the routes in `<Suspense>`, so the first page load only downloads what the shop needs.
 
 **`routes/AppRoutes.jsx`** — turns those arrays into real routes with `.map()`, applying the right layout + guard to each group:
 
@@ -290,16 +250,16 @@ export const privateRoutes = [
 
 ## Cart & Shop
 
-`src/context/CartContext.jsx` follows the exact same pattern as `AuthContext`: a Provider holding `items` in state (persisted to `localStorage`), exposing `addToCart`, `removeFromCart`, `updateQty`, plus derived `count` and `total`. Any component can read or update the cart via `useCart()` — that's how `ProductCard`'s "Add" button, the Navbar's badge count, and the Cart page all stay in sync without passing props down manually.
+`CartContext` and `ProductsContext` load their data from the API and expose actions (`addToCart`, `updateQty`, `removeFromCart`, `checkout`; `addProduct`, `updateProduct`, `deleteProduct`) through `useCart()` / `useProducts()`, so the product cards, navbar badge and cart page stay in sync.
 
-Product data lives in `src/data/products.js` as a plain array (id, name, category, price, seller) — there's no backend, so this stands in for a real product API.
+Prices are never trusted from the browser: adding to the cart sends only a product id, and the server builds the line from the real product (`server/lib/catalog.js`). Checkout re-prices every line from the live product again, attributes each item to its real seller, and removes items that are no longer for sale.
 
 ---
 
 ## Shared Components
 
 ### `Navbar.jsx`
-Sticky, translucent public top bar. Desktop links (Home, Shop, About, Contact) via `NavLink` for active-state styling, a cart icon with a live badge, and auth-aware actions (Login/Signup vs. Dashboard). Includes a mobile hamburger menu.
+Sticky, translucent public top bar. Desktop links (Shop, Contact, Help Center) via `NavLink` for active-state styling, a search box, a cart icon with a live badge, a messages icon with an unread dot, and auth-aware actions (Login/Signup vs. Profile/Dashboard). Includes a mobile hamburger menu.
 
 ### `Footer.jsx`
 Four-column responsive layout on a navy background: brand + socials, quick links, customer service links, and Ghana contact details.
@@ -410,10 +370,10 @@ const { isAuthenticated } = useAuth()
 ## Getting Started
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) 18+ (recommended: latest LTS)
-- npm (bundled with Node.js)
+- [Node.js](https://nodejs.org/) 22 (the version Vercel uses, set in `package.json` `engines`; Vite 8 needs at least 20.19)
+- A [Supabase](https://supabase.com/) project
 
-### Installation
+### 1. Install
 
 ```bash
 git clone <repository-url>
@@ -421,37 +381,47 @@ cd bestmart
 npm install
 ```
 
-### Run the development server
+### 2. Configure environment variables
+
+Copy `.env.example` to `.env` and fill in the values from **Supabase → Project Settings → API**:
+
+| Variable | Used by | Notes |
+|---|---|---|
+| `VITE_SUPABASE_URL` | Browser | Project URL |
+| `VITE_SUPABASE_ANON_KEY` | Browser | Public anon key |
+| `SUPABASE_URL` | Express API | Same project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Express API | **Secret.** Never prefix it with `VITE_` — that would ship it to the browser |
+
+### 3. Set up the database
+
+In the Supabase SQL editor, run every file in `supabase/migrations/` in order (`001` through `007`).
+
+### 4. Run locally
 
 ```bash
 npm run dev
 ```
 
-Vite will start a local dev server (default: `http://localhost:5173`, or the next available port if that one is in use) with hot module replacement.
+Starts Vite (`http://localhost:5173`) and the Express API (`http://localhost:3001`) together; Vite proxies `/api/*` to the API.
 
-### Build for production
+### Deploying to Vercel
 
-```bash
-npm run build
-```
-
-Outputs an optimized static build to the `dist/` folder.
-
-### Preview the production build locally
-
-```bash
-npm run preview
-```
+1. Import the repository in Vercel (framework preset: Vite).
+2. Add all four environment variables above under **Project Settings → Environment Variables**.
+3. Deploy. `vercel.json` sends `/api/*` to the Express function in `api/index.js` and everything else to the SPA.
+4. Check `https://<your-app>/api/health` — it should return `{"ok":true,"hasSupabaseUrl":true,"hasServiceRoleKey":true}`.
 
 ---
 
 ## Available Scripts
 
-| Script | Command | Description |
-|---|---|---|
-| `dev` | `npm run dev` | Starts the Vite development server with HMR |
-| `build` | `npm run build` | Builds an optimized production bundle |
-| `preview` | `npm run preview` | Serves the production build locally for a final sanity check |
+| Script | Description |
+|---|---|
+| `npm run dev` | Vite dev server + Express API together |
+| `npm run dev:web` | Vite only |
+| `npm run dev:api` | Express API only (reads `.env`) |
+| `npm run build` | Production build of the front end into `dist/` |
+| `npm run preview` | Serve the production build locally (run `npm run dev:api` too for `/api`) |
 
 ---
 
@@ -470,7 +440,8 @@ Every page is mobile-first and verified at both mobile (~390px) and desktop (128
 
 - **Why separate `UnauthWrapper`/`AuthWrapper` layouts instead of one shared shell:** the public storefront and the seller dashboard are different products wearing the same brand — a navbar+footer doesn't belong around a dashboard, and a sidebar doesn't belong around a landing page. Splitting the layout in two keeps each one simple instead of branching internally on auth state.
 - **Why a `routesConfig.js` data file instead of writing `<Route>` tags by hand in `AppRoutes.jsx`:** adding a page becomes a one-line change in one file, with no risk of forgetting to wrap it in the right layout or guard — the `.map()` in `AppRoutes.jsx` handles that consistently every time.
-- **Why Context API over a state library (Redux, Zustand):** `AuthContext` and `CartContext` each hold a small, well-scoped slice of state with a handful of actions — Context plus a `useX()` hook covers that cleanly without adding a dependency.
+- **Why an Express API in front of Supabase instead of querying it from the browser:** business rules like "the price comes from the product, not the request" or "only the product's owner can edit it" are easiest to read, test and enforce in one server-side place. The browser keeps using Supabase directly only for Auth and Realtime.
+- **Why Context API over a state library (Redux, Zustand):** `AuthContext`, `CartContext` and `ProductsContext` each hold a small, well-scoped slice of state with a handful of actions — Context plus a `useX()` hook covers that cleanly without adding a dependency.
 - **Why Tailwind CSS v4 over plain CSS or a component library:** keeps styling co-located with markup and avoids pulling in a heavier UI kit for a project whose goal is to demonstrate hand-built component design.
 - **Why plain `useState` for forms instead of a form library:** the forms here are small; the goal was to demonstrate understanding of controlled inputs and manual validation, not library integration.
 - **Why navy/blue/orange:** pulled directly from the BestMart logo, so the generated UI matches the actual brand identity rather than an arbitrary palette.
@@ -480,20 +451,21 @@ Every page is mobile-first and verified at both mobile (~390px) and desktop (128
 
 ## Known Limitations
 
-- There is no real backend: Login/Signup accept any validly-shaped input and fabricate a session in `localStorage`; the Shop's product catalog is mock data in `src/data/products.js`; the Cart's Checkout button is UI-only.
-- "My Products", "Advertise", "Orders", and "Settings" in the dashboard are placeholder pages awaiting real functionality.
-- `axios` is installed in anticipation of API integration but is not yet used anywhere in the codebase.
-- Category and About-page images are stock photography (Pexels), standing in for real product/seller photography.
+- Checkout creates an order but takes no payment.
+- Ad campaigns (`/dashboard/advertise`) are stored in the browser's `localStorage` per seller, not in the database, and don't affect the shop yet.
+- An order containing items from several sellers has a single status, so any of those sellers can advance it.
+- The Contact form validates input but doesn't send anything.
+- Category and About-page images are stock photography (Pexels).
 
 ---
 
 ## Roadmap
 
-- [ ] Connect Login/Sign Up/session to a real authentication API
-- [ ] Replace the mock product catalog with a real product API, and build out My Products/Advertise/Orders/Settings
-- [ ] Wire the Cart's Checkout button to a real payment flow
-- [ ] Add automated tests (component tests with React Testing Library, e2e with Playwright)
-- [ ] Replace stock category/about photography with real product and seller photos
+- [ ] Payment integration (e.g. Mobile Money) at checkout
+- [ ] Store ad campaigns in the database and feature advertised products in the shop
+- [ ] Per-seller fulfilment status for multi-seller orders
+- [ ] Automated tests (API route tests, React Testing Library, Playwright e2e)
+- [ ] Replace stock photography with real product and seller photos
 
 ---
 
