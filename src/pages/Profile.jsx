@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { api } from '../lib/apiClient'
 import { getPrimaryImage } from '../utils/productImages'
 import { ORDER_STATUS_STYLES, formatOrderDate } from '../utils/orderLineItems'
+import { formatCedis } from '../utils/money'
 
 /**
  * Every account's personal profile — distinct from a seller's shop
@@ -20,7 +21,6 @@ function Profile() {
   const { user, updateUser } = useAuth()
   const [form, setForm] = useState({
     name: user?.name || '',
-    email: user?.email || '',
     phone: user?.phone || '',
   })
   const [errors, setErrors] = useState({})
@@ -43,7 +43,7 @@ function Profile() {
     return () => {
       active = false
     }
-  }, [user])
+  }, [user?.id])
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))
@@ -53,8 +53,6 @@ function Profile() {
   const validate = () => {
     const next = {}
     if (!form.name.trim()) next.name = 'Name is required'
-    if (!form.email.trim()) next.email = 'Email is required'
-    else if (!/^\S+@\S+\.\S+$/.test(form.email)) next.email = 'Enter a valid email'
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -141,9 +139,9 @@ function Profile() {
                 name="email"
                 type="email"
                 label="Email address"
-                value={form.email}
-                onChange={handleChange}
-                error={errors.email}
+                value={user?.email || ''}
+                disabled
+                readOnly
               />
             </div>
             <Input
@@ -205,14 +203,14 @@ function Profile() {
                           Sold by {item.seller} · Qty {item.qty}
                         </p>
                       </div>
-                      <p className="text-sm font-semibold text-gray-900 shrink-0">₵{item.qty * item.price}</p>
+                      <p className="text-sm font-semibold text-gray-900 shrink-0">{formatCedis(item.qty * item.price)}</p>
                     </div>
                   ))}
                 </div>
 
                 <div className="flex items-center justify-between pt-4 mt-1 border-t border-gray-100">
                   <span className="text-sm text-gray-600">Total</span>
-                  <span className="font-bold text-gray-900">₵{order.total}</span>
+                  <span className="font-bold text-gray-900">{formatCedis(order.total)}</span>
                 </div>
               </div>
             ))}

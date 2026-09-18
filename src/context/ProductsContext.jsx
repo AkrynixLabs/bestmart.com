@@ -18,10 +18,9 @@ export function ProductsProvider({ children }) {
     let active = true
 
     api.get('/products').then((result) => {
-      if (active && result.ok) {
-        setDbProducts(result.data)
-        setLoading(false)
-      }
+      if (!active) return
+      if (result.ok) setDbProducts(result.data)
+      setLoading(false)
     })
 
     return () => {

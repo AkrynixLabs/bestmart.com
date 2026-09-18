@@ -30,6 +30,7 @@ function SellerSignup() {
   const [form, setForm] = useState(emptyForm)
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
+  const [notice, setNotice] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -93,6 +94,11 @@ function SellerSignup() {
         })
     setSubmitting(false)
 
+    if (result.needsConfirmation) {
+      setErrors({})
+      setNotice(result.error)
+      return
+    }
     if (!result.ok) {
       setErrors({ form: result.error })
       return
@@ -127,6 +133,11 @@ function SellerSignup() {
         </div>
 
         <form onSubmit={handleSubmit} noValidate>
+          {notice && (
+            <div className="mb-4 rounded-lg bg-blue-50 text-brand-blue text-sm px-4 py-2.5" role="status">
+              {notice}
+            </div>
+          )}
           {errors.form && (
             <div className="mb-4 rounded-lg bg-red-50 text-red-700 text-sm px-4 py-2.5">
               {errors.form}

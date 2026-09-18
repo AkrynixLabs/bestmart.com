@@ -24,6 +24,7 @@ import { useAuth } from '../context/AuthContext'
 import { useProducts } from '../context/ProductsContext'
 import { categoryImages } from '../data/categoryImages'
 import { getPrimaryImage } from '../utils/productImages'
+import { formatCedis } from '../utils/money'
 
 const trustBar = [
   { icon: HiOutlineCheckBadge, title: 'Premium Quality', text: 'Made with the finest materials' },
@@ -91,6 +92,7 @@ function Shop() {
   )
   const [query, setQuery] = useState(searchParams.get('q') || '')
   const { addToCart } = useCart()
+  const [quickAdded, setQuickAdded] = useState(null) // { id, ok } — brief button feedback
   const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -118,12 +120,19 @@ function Shop() {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  const handleQuickAdd = (product) => {
+  useEffect(() => {
+    if (!quickAdded) return
+    const timer = setTimeout(() => setQuickAdded(null), 2000)
+    return () => clearTimeout(timer)
+  }, [quickAdded])
+
+  const handleQuickAdd = async (product) => {
     if (!isAuthenticated) {
       navigate('/signup', { state: { from: location } })
       return
     }
-    addToCart(product)
+    const result = await addToCart(product)
+    setQuickAdded({ id: product.id, ok: result.ok })
   }
 
   const handleHeroSearch = (e) => {
@@ -392,13 +401,13 @@ function Shop() {
                     <span className="text-xs text-gray-600">{product.rating}</span>
                     <span className="text-xs text-gray-400">· Sold by {product.seller}</span>
                   </div>
-                  <p className="font-bold text-gray-900 mt-1">₵{product.price}</p>
+                  <p className="font-bold text-gray-900 mt-1">{formatCedis(product.price)}</p>
                 </div>
                 <button
                   onClick={() => handleQuickAdd(product)}
                   className="shrink-0 text-xs font-medium bg-brand-blue hover:bg-brand-blue-dark text-white px-4 py-2 rounded-lg transition"
                 >
-                  Quick Add
+                  {quickAdded?.id === product.id ? (quickAdded.ok ? 'Added ✓' : 'Try again') : 'Quick Add'}
                 </button>
               </div>
             ))}

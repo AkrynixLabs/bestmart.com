@@ -1,20 +1,24 @@
+import { lazy } from 'react'
+
+// Shop is the landing page, so it ships in the main bundle; every other page
+// is loaded on demand (AppRoutes wraps routes in <Suspense>).
 import Shop from '../pages/Shop'
-import Cart from '../pages/Cart'
-import About from '../pages/About'
-import Contact from '../pages/Contact'
-import HelpCenter from '../pages/HelpCenter'
-import SellerSignup from '../pages/SellerSignup'
-import Login from '../pages/Login'
-import Signup from '../pages/Signup'
-import ForgotPassword from '../pages/ForgotPassword'
-import ResetPassword from '../pages/ResetPassword'
-import Profile from '../pages/Profile'
-import Messages from '../pages/Messages'
-import Dashboard from '../pages/dashboard/Dashboard'
-import Products from '../pages/dashboard/Products'
-import Advertise from '../pages/dashboard/Advertise'
-import Orders from '../pages/dashboard/Orders'
-import Settings from '../pages/dashboard/Settings'
+const Cart = lazy(() => import('../pages/Cart'))
+const About = lazy(() => import('../pages/About'))
+const Contact = lazy(() => import('../pages/Contact'))
+const HelpCenter = lazy(() => import('../pages/HelpCenter'))
+const SellerSignup = lazy(() => import('../pages/SellerSignup'))
+const Login = lazy(() => import('../pages/Login'))
+const Signup = lazy(() => import('../pages/Signup'))
+const ForgotPassword = lazy(() => import('../pages/ForgotPassword'))
+const ResetPassword = lazy(() => import('../pages/ResetPassword'))
+const Profile = lazy(() => import('../pages/Profile'))
+const Messages = lazy(() => import('../pages/Messages'))
+const Dashboard = lazy(() => import('../pages/dashboard/Dashboard'))
+const Products = lazy(() => import('../pages/dashboard/Products'))
+const Advertise = lazy(() => import('../pages/dashboard/Advertise'))
+const Orders = lazy(() => import('../pages/dashboard/Orders'))
+const Settings = lazy(() => import('../pages/dashboard/Settings'))
 
 /**
  * Every public page lives here. Open to anyone, logged in or not.
@@ -28,6 +32,10 @@ export const publicRoutes = [
   { path: '/contact', element: Contact },
   { path: '/help-center', element: HelpCenter },
   { path: '/sell', element: SellerSignup },
+  // Public, not guest-only: opening the emailed reset link signs the user in
+  // with a recovery session, and GuestRoute would then bounce them away
+  // before they could choose a new password.
+  { path: '/reset-password', element: ResetPassword },
 ]
 
 /**
@@ -38,7 +46,6 @@ export const guestRoutes = [
   { path: '/login', element: Login },
   { path: '/signup', element: Signup },
   { path: '/forgot-password', element: ForgotPassword },
-  { path: '/reset-password', element: ResetPassword },
 ]
 
 /**

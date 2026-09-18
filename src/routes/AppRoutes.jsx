@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import UnauthWrapper from '../layouts/UnauthWrapper'
 import AuthWrapper from '../layouts/AuthWrapper'
@@ -26,38 +27,44 @@ function ShopRedirect() {
  * Each group is just an array turned into <Route> elements with .map() —
  * to add a page, edit routesConfig.js, never this file.
  */
+function PageFallback() {
+  return <div className="min-h-[50vh] flex items-center justify-center text-sm text-gray-400">Loading...</div>
+}
+
 function AppRoutes() {
   return (
-    <Routes>
-      <Route element={<UnauthWrapper />}>
-        {publicRoutes.map(({ path, element: Element }) => (
-          <Route key={path} path={path} element={<Element />} />
-        ))}
-        <Route path="/shop" element={<ShopRedirect />} />
-
-        <Route element={<GuestRoute />}>
-          {guestRoutes.map(({ path, element: Element }) => (
+    <Suspense fallback={<PageFallback />}>
+      <Routes>
+        <Route element={<UnauthWrapper />}>
+          {publicRoutes.map(({ path, element: Element }) => (
             <Route key={path} path={path} element={<Element />} />
           ))}
+          <Route path="/shop" element={<ShopRedirect />} />
+
+          <Route element={<GuestRoute />}>
+            {guestRoutes.map(({ path, element: Element }) => (
+              <Route key={path} path={path} element={<Element />} />
+            ))}
+          </Route>
+
+          <Route element={<AccountRoute />}>
+            {accountRoutes.map(({ path, element: Element }) => (
+              <Route key={path} path={path} element={<Element />} />
+            ))}
+          </Route>
         </Route>
 
-        <Route element={<AccountRoute />}>
-          {accountRoutes.map(({ path, element: Element }) => (
-            <Route key={path} path={path} element={<Element />} />
-          ))}
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AuthWrapper />}>
+            {privateRoutes.map(({ path, element: Element }) => (
+              <Route key={path} path={path} element={<Element />} />
+            ))}
+          </Route>
         </Route>
-      </Route>
 
-      <Route element={<ProtectedRoute />}>
-        <Route element={<AuthWrapper />}>
-          {privateRoutes.map(({ path, element: Element }) => (
-            <Route key={path} path={path} element={<Element />} />
-          ))}
-        </Route>
-      </Route>
-
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Suspense>
   )
 }
 

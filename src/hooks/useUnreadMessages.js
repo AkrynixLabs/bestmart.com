@@ -42,7 +42,7 @@ export function useUnreadMessages() {
       active = false
       supabase.removeChannel(channel)
     }
-  }, [user])
+  }, [user?.id])
 
   return hasUnread
 }

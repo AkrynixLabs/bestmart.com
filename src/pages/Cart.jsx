@@ -2,17 +2,33 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { HiOutlineTrash } from 'react-icons/hi'
 import { HiOutlineCheckCircle } from 'react-icons/hi2'
-import { useCart } from '../context/CartContext'
+import { useCart, MAX_QTY } from '../context/CartContext'
 import Button from '../components/ui/Button'
 import { getPrimaryImage } from '../utils/productImages'
+import { formatCedis } from '../utils/money'
 
 function Cart() {
-  const { items, removeFromCart, updateQty, total, checkout } = useCart()
+  const { items, loading, removeFromCart, updateQty, total, checkout } = useCart()
   const [placedOrder, setPlacedOrder] = useState(null)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  const handleQtyChange = async (id, value) => {
+    const qty = Math.trunc(Number(value))
+    if (!qty || qty < 1 || qty > MAX_QTY) return
+    setError('')
+    const result = await updateQty(id, qty)
+    if (!result.ok && result.error) setError(result.error)
+  }
+
+  const handleRemove = async (id) => {
+    setError('')
+    const result = await removeFromCart(id)
+    if (!result.ok && result.error) setError(result.error)
+  }
+
   const handleCheckout = async () => {
+    setError('')
     setSubmitting(true)
     const result = await checkout()
     setSubmitting(false)
@@ -30,7 +46,7 @@ function Cart() {
         <HiOutlineCheckCircle className="text-green-500 mx-auto" size={56} />
         <h1 className="text-2xl font-bold text-gray-900 mt-4">Order placed!</h1>
         <p className="text-gray-600 mt-2">
-          Order #{String(placedOrder.id).slice(-6)} for ₵{placedOrder.total} is on its way.
+          Order #{placedOrder.id} for {formatCedis(placedOrder.total)} is on its way.
         </p>
         <div className="mt-6 flex flex-wrap gap-3 justify-center">
           <Link to="/profile">
@@ -44,9 +60,16 @@ function Cart() {
     )
   }
 
+  if (loading) {
+    return <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center text-gray-500">Loading your cart...</div>
+  }
+
   if (items.length === 0) {
     return (
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
+        {error && (
+          <div className="mb-6 rounded-lg bg-red-50 text-red-700 text-sm px-4 py-2.5">{error}</div>
+        )}
         <h1 className="text-2xl font-bold text-gray-900">Your cart is empty</h1>
         <p className="text-gray-600 mt-2">Browse the shop and add something you like.</p>
         <Link to="/">
@@ -70,18 +93,20 @@ function Cart() {
             />
             <div className="flex-1 min-w-0">
               <p className="font-medium text-gray-900 truncate">{item.name}</p>
-              <p className="text-sm text-gray-500">₵{item.price} each</p>
+              <p className="text-sm text-gray-500">{formatCedis(item.price)} each</p>
             </div>
             <input
               type="number"
               min={1}
+              max={MAX_QTY}
               value={item.qty}
-              onChange={(e) => updateQty(item.id, Number(e.target.value))}
+              onChange={(e) => handleQtyChange(item.id, e.target.value)}
+              aria-label={`Quantity of ${item.name}`}
               className="w-16 px-2 py-1.5 border border-gray-300 rounded-lg text-center"
             />
-            <span className="font-semibold text-gray-900 w-16 text-right">₵{item.qty * item.price}</span>
+            <span className="font-semibold text-gray-900 w-20 text-right">{formatCedis(item.qty * item.price)}</span>
             <button
-              onClick={() => removeFromCart(item.id)}
+              onClick={() => handleRemove(item.id)}
               aria-label="Remove item"
               className="text-gray-400 hover:text-red-500 transition"
             >
@@ -93,7 +118,7 @@ function Cart() {
 
       <div className="mt-6 flex items-center justify-between bg-white rounded-xl border border-gray-100 p-6">
         <span className="text-gray-600">Total</span>
-        <span className="text-2xl font-bold text-gray-900">₵{total}</span>
+        <span className="text-2xl font-bold text-gray-900">{formatCedis(total)}</span>
       </div>
 
       {error && (

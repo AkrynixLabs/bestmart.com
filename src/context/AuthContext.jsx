@@ -17,28 +17,28 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let active = true
+    // Only the newest auth event's profile response may update state — an
+    // older, slower response must not overwrite a newer one.
+    let latest = 0
 
-    async function loadSession() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      if (session?.user) {
-        const result = await api.get('/profile', { token: session.access_token })
-        if (active && result.ok) setUser(result.data)
-      }
-      if (active) setLoading(false)
-    }
-    loadSession()
-
-    // Keeps the session in sync on sign-in/out — including a logout that
-    // happens in another tab.
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    // The listener fires INITIAL_SESSION right away (restoring a saved
+    // session on page load), then keeps state in sync on sign-in/out —
+    // including a logout in another tab. So no separate getSession() call.
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const request = ++latest
       if (!session?.user) {
         setUser(null)
+        setLoading(false)
         return
       }
-      const result = await api.get('/profile', { token: session.access_token })
-      if (result.ok) setUser(result.data)
+      // Deferred out of the callback: Supabase holds its auth lock while
+      // listeners run, so awaiting work inside one can deadlock.
+      setTimeout(async () => {
+        const result = await api.get('/profile', { token: session.access_token })
+        if (!active || request !== latest) return
+        if (result.ok) setUser(result.data)
+        setLoading(false)
+      }, 0)
     })
 
     return () => {
@@ -51,16 +51,25 @@ export function AuthProvider({ children }) {
   // (hashed password, handled entirely by Supabase — never touches our
   // code) plus a matching row in `profiles` via the API for everything else.
   const registerAccount = async ({ password, ...profile }) => {
-    const { data, error } = await supabase.auth.signUp({ email: profile.email, password })
+    // The profile fields also ride along as user_metadata: if this project
+    // requires email confirmation there's no session yet to call the
+    // profile API with, and the server builds the profile from this
+    // metadata on first login instead (server/routes/profile.js) — so a
+    // seller's shop name isn't lost along the way.
+    const { data, error } = await supabase.auth.signUp({
+      email: profile.email,
+      password,
+      options: {
+        data: { name: profile.name, businessName: profile.businessName, isSeller: Boolean(profile.isSeller) },
+      },
+    })
     if (error) return { ok: false, error: error.message }
 
     if (!data.session) {
-      // This Supabase project requires email confirmation before a session
-      // exists, so we can't call the (authenticated) profile API yet. It
-      // gets created on their first successful login instead.
       return {
         ok: false,
-        error: 'Check your email to confirm your account, then log in.',
+        needsConfirmation: true,
+        error: 'Almost there! Check your email to confirm your account, then log in.',
       }
     }
 
@@ -111,7 +120,7 @@ export function AuthProvider({ children }) {
     const result = await api.patch('/profile', updates)
     if (!result.ok) return result
 
-    setUser((prev) => ({ ...prev, ...updates }))
+    setUser(result.data)
     return { ok: true }
   }
 

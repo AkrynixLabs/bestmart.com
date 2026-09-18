@@ -5,8 +5,9 @@ import TextArea from '../../components/ui/TextArea'
 import Button from '../../components/ui/Button'
 import { useAuth } from '../../context/AuthContext'
 import { useProducts } from '../../context/ProductsContext'
+import { api } from '../../lib/apiClient'
 
-const MAX_IMAGE_BYTES = 3 * 1024 * 1024 // 3MB — stored as a data URL in localStorage
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024 // 3MB — matches the server's upload limit
 
 function Settings() {
   const { user, updateUser } = useAuth()
@@ -14,7 +15,6 @@ function Settings() {
 
   const [form, setForm] = useState({
     name: user?.name || '',
-    email: user?.email || '',
     phone: user?.phone || '',
     businessName: user?.businessName || '',
     businessCategory: user?.businessCategory || '',
@@ -25,6 +25,7 @@ function Settings() {
   const [errors, setErrors] = useState({})
   const [saved, setSaved] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
   const fileInputRef = useRef(null)
 
   const handleChange = (e) => {
@@ -32,12 +33,13 @@ function Settings() {
     setSaved(false)
   }
 
-  const handleLogoChange = (e) => {
+  const handleLogoChange = async (e) => {
     const file = e.target.files?.[0]
+    if (fileInputRef.current) fileInputRef.current.value = ''
     if (!file) return
 
-    if (!file.type.startsWith('image/')) {
-      setErrors((prev) => ({ ...prev, businessLogo: 'Please choose an image file' }))
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
+      setErrors((prev) => ({ ...prev, businessLogo: 'Please choose a PNG, JPG, WebP or GIF image' }))
       return
     }
     if (file.size > MAX_IMAGE_BYTES) {
@@ -46,12 +48,18 @@ function Settings() {
     }
 
     setErrors((prev) => ({ ...prev, businessLogo: undefined }))
-    const reader = new FileReader()
-    reader.onload = () => {
-      setForm((prev) => ({ ...prev, businessLogo: reader.result }))
-      setSaved(false)
+    setUploadingLogo(true)
+    const formData = new FormData()
+    formData.append('file', file)
+    const result = await api.post('/profile/logo', formData, { isFormData: true })
+    setUploadingLogo(false)
+
+    if (!result.ok) {
+      setErrors((prev) => ({ ...prev, businessLogo: result.error }))
+      return
     }
-    reader.readAsDataURL(file)
+    setForm((prev) => ({ ...prev, businessLogo: result.data.url }))
+    setSaved(false)
   }
 
   const handleRemoveLogo = () => {
@@ -63,8 +71,6 @@ function Settings() {
   const validate = () => {
     const next = {}
     if (!form.name.trim()) next.name = 'Name is required'
-    if (!form.email.trim()) next.email = 'Email is required'
-    else if (!/^\S+@\S+\.\S+$/.test(form.email)) next.email = 'Enter a valid email'
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -121,9 +127,9 @@ function Settings() {
             name="email"
             type="email"
             label="Email address"
-            value={form.email}
-            onChange={handleChange}
-            error={errors.email}
+            value={user?.email || ''}
+            disabled
+            readOnly
           />
         </div>
         <Input
@@ -155,11 +161,12 @@ function Settings() {
             <div className="flex flex-col items-start gap-1.5">
               <label className="inline-flex items-center gap-2 text-sm font-medium text-brand-blue border border-brand-blue px-3 py-1.5 rounded-lg hover:bg-blue-50 transition cursor-pointer">
                 <HiOutlineArrowUpTray size={14} />
-                {form.businessLogo ? 'Change Logo' : 'Upload Logo'}
+                {uploadingLogo ? 'Uploading...' : form.businessLogo ? 'Change Logo' : 'Upload Logo'}
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  disabled={uploadingLogo}
                   onChange={handleLogoChange}
                   className="hidden"
                 />
@@ -225,7 +232,7 @@ function Settings() {
           onChange={handleChange}
         />
 
-        <Button type="submit" disabled={submitting}>
+        <Button type="submit" disabled={submitting || uploadingLogo}>
           {submitting ? 'Saving...' : 'Save Changes'}
         </Button>
       </form>

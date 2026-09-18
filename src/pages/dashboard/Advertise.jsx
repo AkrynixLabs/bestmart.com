@@ -10,14 +10,17 @@ import {
 import Input from '../../components/ui/Input'
 import Button from '../../components/ui/Button'
 import { useProducts } from '../../context/ProductsContext'
+import { useAuth } from '../../context/AuthContext'
 import { useLocalStorageList } from '../../hooks/useLocalStorageList'
+import { formatCedis } from '../../utils/money'
 
 const DURATIONS = [7, 14, 30]
 
 function Advertise() {
   const { products } = useProducts()
-  const myProducts = products.filter((p) => p.sellerAdded)
-  const [ads, setAds] = useLocalStorageList('bestmart_ads', [])
+  const { user } = useAuth()
+  const myProducts = products.filter((p) => p.sellerAdded && p.sellerId === user?.id)
+  const [ads, setAds] = useLocalStorageList(`bestmart_ads_${user?.id}`, [])
 
   const [productId, setProductId] = useState('')
   const [budget, setBudget] = useState('')
@@ -156,7 +159,7 @@ function Advertise() {
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-900 truncate">{ad.productName}</p>
                   <p className="text-sm text-gray-500">
-                    ₵{ad.budget} budget · {ad.duration} days
+                    {formatCedis(ad.budget)} budget · {ad.duration} days
                   </p>
                 </div>
                 <span

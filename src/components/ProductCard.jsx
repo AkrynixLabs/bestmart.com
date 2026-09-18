@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { HiOutlineShoppingCart, HiOutlineHeart, HiHeart, HiStar, HiOutlineChatBubbleLeftRight } from 'react-icons/hi2'
 import { useCart } from '../context/CartContext'
 import { useAuth } from '../context/AuthContext'
 import { categoryImages } from '../data/categoryImages'
 import { getProductImages } from '../utils/productImages'
+import { formatCedis } from '../utils/money'
 
 function ProductCard({ product }) {
   const { addToCart } = useCart()
@@ -13,6 +14,14 @@ function ProductCard({ product }) {
   const location = useLocation()
   const [wishlisted, setWishlisted] = useState(false)
   const [activePhoto, setActivePhoto] = useState(0)
+  const [adding, setAdding] = useState(false)
+  const [cartStatus, setCartStatus] = useState(null) // { ok, text }
+
+  useEffect(() => {
+    if (!cartStatus) return
+    const timer = setTimeout(() => setCartStatus(null), 2500)
+    return () => clearTimeout(timer)
+  }, [cartStatus])
 
   const images = getProductImages(product)
   const hasGallery = images.length > 1
@@ -24,14 +33,19 @@ function ProductCard({ product }) {
 
   // Only real sellers can be messaged — the static demo catalog has no
   // seller_id, and there's no point messaging yourself about your own listing.
-  const canMessageSeller = product.sellerId && product.sellerId !== user?.id
+  const isOwnProduct = Boolean(product.sellerId) && product.sellerId === user?.id
+  const canMessageSeller = Boolean(product.sellerId) && !isOwnProduct
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (!isAuthenticated) {
       navigate('/signup', { state: { from: location } })
       return
     }
-    addToCart(product)
+    if (adding) return
+    setAdding(true)
+    const result = await addToCart(product)
+    setAdding(false)
+    setCartStatus(result.ok ? { ok: true, text: 'Added to cart' } : { ok: false, text: result.error || "Couldn't add to cart" })
   }
 
   const handleMessageSeller = () => {
@@ -99,7 +113,7 @@ function ProductCard({ product }) {
         <h3 className="font-semibold text-gray-900 mt-1">{product.name}</h3>
         <p className="text-xs text-gray-500 mt-0.5">Sold by {product.seller}</p>
 
-        {product.rating && (
+        {product.rating != null && (
           <div className="flex items-center gap-1 mt-1.5">
             <HiStar className="text-yellow-400" size={14} />
             <span className="text-xs text-gray-600">{product.rating}</span>
@@ -108,9 +122,9 @@ function ProductCard({ product }) {
 
         <div className="mt-3 flex items-center justify-between">
           <div className="flex items-baseline gap-2">
-            <span className="font-bold text-gray-900">₵{product.price}</span>
+            <span className="font-bold text-gray-900">{formatCedis(product.price)}</span>
             {product.oldPrice && (
-              <span className="text-xs text-gray-400 line-through">₵{product.oldPrice}</span>
+              <span className="text-xs text-gray-400 line-through">{formatCedis(product.oldPrice)}</span>
             )}
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -123,15 +137,23 @@ function ProductCard({ product }) {
                 <HiOutlineChatBubbleLeftRight size={16} />
               </button>
             )}
-            <button
-              onClick={handleAddToCart}
-              aria-label="Add to cart"
-              className="w-9 h-9 flex items-center justify-center rounded-full bg-brand-orange hover:bg-brand-orange-dark text-white transition"
-            >
-              <HiOutlineShoppingCart size={16} />
-            </button>
+            {!isOwnProduct && (
+              <button
+                onClick={handleAddToCart}
+                disabled={adding}
+                aria-label="Add to cart"
+                className="w-9 h-9 flex items-center justify-center rounded-full bg-brand-orange hover:bg-brand-orange-dark disabled:opacity-60 text-white transition"
+              >
+                <HiOutlineShoppingCart size={16} />
+              </button>
+            )}
           </div>
         </div>
+        {cartStatus && (
+          <p role="status" className={`mt-2 text-xs ${cartStatus.ok ? 'text-green-600' : 'text-red-600'}`}>
+            {cartStatus.text}
+          </p>
+        )}
       </div>
     </div>
   )

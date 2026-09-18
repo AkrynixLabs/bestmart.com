@@ -13,9 +13,12 @@ import { useProducts } from '../../context/ProductsContext'
 import { useAuth } from '../../context/AuthContext'
 import { getProductImages, getPrimaryImage } from '../../utils/productImages'
 import { api } from '../../lib/apiClient'
+import { formatCedis } from '../../utils/money'
 
-const MAX_IMAGE_BYTES = 3 * 1024 * 1024 // 3MB — data URLs live in localStorage, so keep this modest
+const MAX_IMAGE_BYTES = 3 * 1024 * 1024 // 3MB — matches the server's upload limit
 const MAX_IMAGES = 10
+const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+const isAllowedImage = (f) => ALLOWED_TYPES.includes(f.type)
 
 const emptyForm = { name: '', category: '', price: '', oldPrice: '', images: [] }
 
@@ -23,7 +26,7 @@ function Products() {
   const { products, categories, addProduct, updateProduct, deleteProduct } = useProducts()
   const { user } = useAuth()
 
-  const myProducts = products.filter((p) => p.sellerAdded)
+  const myProducts = products.filter((p) => p.sellerAdded && p.sellerId === user?.id)
 
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -48,13 +51,13 @@ function Products() {
       return
     }
 
-    const accepted = files.filter((f) => f.type.startsWith('image/') && f.size <= MAX_IMAGE_BYTES)
-    const rejectedType = files.some((f) => !f.type.startsWith('image/'))
-    const rejectedSize = files.some((f) => f.type.startsWith('image/') && f.size > MAX_IMAGE_BYTES)
+    const accepted = files.filter((f) => isAllowedImage(f) && f.size <= MAX_IMAGE_BYTES)
+    const rejectedType = files.some((f) => !isAllowedImage(f))
+    const rejectedSize = files.some((f) => isAllowedImage(f) && f.size > MAX_IMAGE_BYTES)
     const toAdd = accepted.slice(0, remainingSlots)
 
     if (rejectedType) {
-      setErrors((prev) => ({ ...prev, images: 'Only image files are allowed' }))
+      setErrors((prev) => ({ ...prev, images: 'Only PNG, JPG, WebP or GIF images are allowed' }))
     } else if (rejectedSize) {
       setErrors((prev) => ({ ...prev, images: 'Each image must be under 3MB' }))
     } else if (accepted.length > remainingSlots) {
@@ -138,7 +141,8 @@ function Products() {
       category: form.category,
       price: Number(form.price),
       images: form.images,
-      oldPrice: form.oldPrice ? Number(form.oldPrice) : undefined,
+      // null (not undefined, which JSON drops) so removing it on edit clears it.
+      oldPrice: form.oldPrice ? Number(form.oldPrice) : null,
     }
 
     setSubmitting(true)
@@ -155,9 +159,9 @@ function Products() {
   }
 
   const handleDelete = async (product) => {
-    if (window.confirm(`Remove "${product.name}" from your listings?`)) {
-      await deleteProduct(product.id)
-    }
+    if (!window.confirm(`Remove "${product.name}" from your listings?`)) return
+    const result = await deleteProduct(product.id)
+    if (!result.ok) window.alert(`Couldn't remove "${product.name}": ${result.error}`)
   }
 
   return (
@@ -233,7 +237,7 @@ function Products() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
                     multiple
                     disabled={uploadingImages}
                     onChange={handleImagesChange}
@@ -344,9 +348,9 @@ function Products() {
                   </p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="font-semibold text-gray-900">₵{product.price}</p>
+                  <p className="font-semibold text-gray-900">{formatCedis(product.price)}</p>
                   {product.oldPrice && (
-                    <p className="text-xs text-gray-400 line-through">₵{product.oldPrice}</p>
+                    <p className="text-xs text-gray-400 line-through">{formatCedis(product.oldPrice)}</p>
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">

@@ -17,7 +17,7 @@ function Input({ label, id, error, labelAction, className = '', type, onToggleVi
           type={type}
           className={`w-full px-4 py-2.5 ${onToggleVisibility ? 'pr-11' : ''} rounded-lg border ${
             error ? 'border-red-400' : 'border-gray-300'
-          } text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent transition ${className}`}
+          } text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-transparent transition disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed ${className}`}
           {...props}
         />
         {onToggleVisibility && (

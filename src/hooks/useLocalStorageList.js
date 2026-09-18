@@ -1,20 +1,43 @@
 import { useState, useEffect } from 'react'
 
+function readList(key, fallback) {
+  try {
+    const saved = localStorage.getItem(key)
+    const parsed = saved ? JSON.parse(saved) : null
+    return Array.isArray(parsed) ? parsed : fallback
+  } catch {
+    // Corrupt JSON or storage blocked (private mode) — start fresh rather
+    // than crash the page.
+    return fallback
+  }
+}
+
 /**
- * A useState-shaped array that persists itself to localStorage. Used by the
- * dashboard's Ads and Orders pages — both are "a list of records" with no
- * need for a shared Context, since each page only ever reads the list fresh
- * on mount (they're never on screen at the same time as their writer).
+ * A useState-shaped array that persists itself to localStorage under `key`.
+ * Used by the dashboard's Ads page. If `key` changes (e.g. a different
+ * seller signs in on the same browser), the list reloads from the new key.
  */
 export function useLocalStorageList(key, initialValue = []) {
-  const [items, setItems] = useState(() => {
-    const saved = localStorage.getItem(key)
-    return saved ? JSON.parse(saved) : initialValue
-  })
+  const [state, setState] = useState(() => ({ key, items: readList(key, initialValue) }))
+
+  // Reload synchronously during render when the key changes, so the old
+  // key's list is never written into the new key.
+  let current = state
+  if (state.key !== key) {
+    current = { key, items: readList(key, initialValue) }
+    setState(current)
+  }
 
   useEffect(() => {
-    localStorage.setItem(key, JSON.stringify(items))
-  }, [key, items])
+    try {
+      localStorage.setItem(current.key, JSON.stringify(current.items))
+    } catch {
+      // Storage full or blocked — keep working in memory.
+    }
+  }, [current.key, current.items])
 
-  return [items, setItems]
+  const setItems = (update) =>
+    setState((prev) => ({ ...prev, items: typeof update === 'function' ? update(prev.items) : update }))
+
+  return [current.items, setItems]
 }

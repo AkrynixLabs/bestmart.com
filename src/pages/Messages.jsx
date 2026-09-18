@@ -37,6 +37,8 @@ function Messages() {
 
   const [conversations, setConversations] = useState([])
   const [listLoading, setListLoading] = useState(true)
+  const [listError, setListError] = useState('')
+  const [sendError, setSendError] = useState('')
   const [selectedId, setSelectedId] = useState(null)
   const [messages, setMessages] = useState([])
   const [threadLoading, setThreadLoading] = useState(false)
@@ -48,6 +50,9 @@ function Messages() {
   const selectedConvRef = useRef(null)
   const deepLinkHandledRef = useRef(false)
   const messagesEndRef = useRef(null)
+  // The thread most recently asked for — a slower response for a thread the
+  // user already clicked away from must not overwrite the current one.
+  const requestedThreadRef = useRef(null)
 
   useEffect(() => {
     selectedConvRef.current = conversations.find((c) => c.id === selectedId) || null
@@ -55,9 +60,13 @@ function Messages() {
 
   const loadConversations = async () => {
     const result = await api.get('/conversations')
-    if (!result.ok) return []
-    setConversations(result.data)
     setListLoading(false)
+    if (!result.ok) {
+      setListError(result.error)
+      return []
+    }
+    setListError('')
+    setConversations(result.data)
     return result.data
   }
 
@@ -65,7 +74,7 @@ function Messages() {
     if (!user) return
     loadConversations()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user])
+  }, [user?.id])
 
   // "Message Seller" deep link: find or create the thread with that seller,
   // attach the product context to the next message, then open it.
@@ -93,7 +102,7 @@ function Messages() {
       setSearchParams({}, { replace: true })
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, listLoading, searchParams])
+  }, [user?.id, listLoading, searchParams])
 
   const markRead = async (conv) => {
     if (!conv || !conv.unread) return
@@ -102,10 +111,13 @@ function Messages() {
   }
 
   const openConversation = async (conv) => {
+    requestedThreadRef.current = conv.id
     setSelectedId(conv.id)
     setMobileView('thread')
+    setSendError('')
     setThreadLoading(true)
     const result = await api.get(`/conversations/${conv.id}/messages`)
+    if (requestedThreadRef.current !== conv.id) return
     setMessages(result.ok ? result.data : [])
     setThreadLoading(false)
     markRead(conv)
@@ -122,6 +134,15 @@ function Messages() {
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${selectedId}` },
         (payload) => {
           setMessages((prev) => (prev.some((m) => m.id === payload.new.id) ? prev : [...prev, payload.new]))
+          setConversations((prev) =>
+            prev
+              .map((c) =>
+                c.id === payload.new.conversation_id
+                  ? { ...c, lastMessageAt: payload.new.created_at, preview: payload.new.body }
+                  : c
+              )
+              .sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt))
+          )
           if (payload.new.sender_id !== user.id) {
             markRead(selectedConvRef.current)
           }
@@ -145,19 +166,25 @@ function Messages() {
     if (!body || !selectedId || sending) return
 
     setSending(true)
+    setSendError('')
     const result = await api.post(`/conversations/${selectedId}/messages`, {
       body,
       ...(pendingProduct ? { productId: pendingProduct.id, productName: pendingProduct.name } : {}),
     })
     if (result.ok) {
+      const sent = result.data
       setDraft('')
       setPendingProduct(null)
-      const now = new Date().toISOString()
+      // Show it right away rather than waiting for the Realtime echo (which
+      // the de-dupe by id above then ignores).
+      setMessages((prev) => (prev.some((m) => m.id === sent.id) ? prev : [...prev, sent]))
       setConversations((prev) =>
         prev
-          .map((c) => (c.id === selectedId ? { ...c, lastMessageAt: now, preview: body } : c))
+          .map((c) => (c.id === selectedId ? { ...c, lastMessageAt: sent.created_at, preview: body } : c))
           .sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt))
       )
+    } else {
+      setSendError(result.error)
     }
     setSending(false)
   }
@@ -171,7 +198,14 @@ function Messages() {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden grid md:grid-cols-[280px_1fr] h-[70vh] min-h-[420px]">
         {/* Conversation list */}
         <div className={`border-r border-gray-100 overflow-y-auto ${mobileView === 'thread' ? 'hidden md:block' : ''}`}>
-          {listLoading ? null : conversations.length === 0 ? (
+          {listLoading ? null : listError ? (
+            <div className="p-6 text-center text-sm text-red-600">
+              Couldn't load your conversations.{' '}
+              <button type="button" onClick={loadConversations} className="underline">
+                Try again
+              </button>
+            </div>
+          ) : conversations.length === 0 ? (
             <div className="p-6 text-center text-sm text-gray-500">
               <HiOutlineChatBubbleLeftRight className="mx-auto text-gray-300 mb-2" size={32} />
               No conversations yet. Message a seller from a product to start one.
@@ -246,6 +280,7 @@ function Messages() {
               </div>
 
               <form onSubmit={handleSend} className="border-t border-gray-100 p-3 shrink-0">
+                {sendError && <p className="mb-2 text-xs text-red-600">{sendError}</p>}
                 {pendingProduct && (
                   <div className="mb-2 flex items-center justify-between text-xs bg-blue-50 text-brand-blue rounded-lg px-3 py-1.5">
                     <span>Re: {pendingProduct.name}</span>

@@ -4,6 +4,7 @@ import { api } from '../../lib/apiClient'
 import { useAuth } from '../../context/AuthContext'
 import { getPrimaryImage } from '../../utils/productImages'
 import { formatOrderDate, ORDER_STATUS_STYLES } from '../../utils/orderLineItems'
+import { formatCedis } from '../../utils/money'
 
 const STATUS_FLOW = ['Processing', 'Shipped', 'Delivered']
 
@@ -11,6 +12,7 @@ function Orders() {
   const { user } = useAuth()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     if (!user) return
@@ -19,17 +21,22 @@ function Orders() {
     api.get('/seller/orders').then((result) => {
       if (!active) return
       if (result.ok) setOrders(result.data)
+      else setError(result.error)
       setLoading(false)
     })
 
     return () => {
       active = false
     }
-  }, [user])
+  }, [user?.id])
 
   const advanceStatus = async (id) => {
+    setError('')
     const result = await api.patch(`/seller/orders/${id}/status`)
-    if (!result.ok) return
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
 
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: result.data.status } : o)))
   }
@@ -42,6 +49,8 @@ function Orders() {
       <p className="text-gray-600 mt-1">
         {orders.length} {orders.length === 1 ? 'order' : 'orders'} placed through your store.
       </p>
+
+      {error && <div className="mt-4 rounded-lg bg-red-50 text-red-700 text-sm px-4 py-2.5">{error}</div>}
 
       {orders.length === 0 ? (
         <div className="mt-6 bg-white rounded-xl border border-dashed border-gray-300 p-16 text-center">
@@ -78,14 +87,14 @@ function Orders() {
                       <p className="text-sm font-medium text-gray-900 truncate">{item.name}</p>
                       <p className="text-xs text-gray-500">Qty {item.qty}</p>
                     </div>
-                    <p className="text-sm font-semibold text-gray-900 shrink-0">₵{item.qty * item.price}</p>
+                    <p className="text-sm font-semibold text-gray-900 shrink-0">{formatCedis(item.qty * item.price)}</p>
                   </div>
                 ))}
               </div>
 
               <div className="flex items-center justify-between pt-4 mt-1 border-t border-gray-100">
                 <span className="text-sm text-gray-600">Total</span>
-                <span className="font-bold text-gray-900">₵{order.total}</span>
+                <span className="font-bold text-gray-900">{formatCedis(order.total)}</span>
               </div>
 
               {order.status !== 'Delivered' && (

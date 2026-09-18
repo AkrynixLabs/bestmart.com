@@ -5,11 +5,12 @@ import { useAuth } from '../../context/AuthContext'
 import { useProducts } from '../../context/ProductsContext'
 import { useLocalStorageList } from '../../hooks/useLocalStorageList'
 import { api } from '../../lib/apiClient'
+import { formatCedis } from '../../utils/money'
 
 function Dashboard() {
   const { user } = useAuth()
   const { products } = useProducts()
-  const [ads] = useLocalStorageList('bestmart_ads', [])
+  const [ads] = useLocalStorageList(`bestmart_ads_${user?.id}`, [])
   const [orderStats, setOrderStats] = useState({ orderCount: 0, revenue: 0 })
 
   useEffect(() => {
@@ -23,16 +24,16 @@ function Dashboard() {
     return () => {
       active = false
     }
-  }, [user])
+  }, [user?.id])
 
-  const myProducts = products.filter((p) => p.sellerAdded)
+  const myProducts = products.filter((p) => p.sellerAdded && p.sellerId === user?.id)
   const activeAds = ads.filter((ad) => ad.status === 'active')
 
   const stats = [
     { icon: HiOutlineCube, label: 'Products Listed', value: String(myProducts.length) },
     { icon: HiOutlineMegaphone, label: 'Active Ads', value: String(activeAds.length) },
     { icon: HiOutlineShoppingBag, label: 'Orders', value: String(orderStats.orderCount) },
-    { icon: HiOutlineCurrencyDollar, label: 'Revenue', value: `₵${orderStats.revenue}` },
+    { icon: HiOutlineCurrencyDollar, label: 'Revenue', value: formatCedis(orderStats.revenue) },
   ]
 
   return (

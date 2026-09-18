@@ -11,6 +11,7 @@ function Signup() {
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
+  const [notice, setNotice] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [copied, setCopied] = useState(false)
   const { registerAccount } = useAuth()
@@ -54,13 +55,18 @@ function Signup() {
 
     setSubmitting(true)
     const result = await registerAccount({
-      name: form.name,
-      email: form.email,
+      name: form.name.trim(),
+      email: form.email.trim(),
       password: form.password,
       isSeller: false,
     })
     setSubmitting(false)
 
+    if (result.needsConfirmation) {
+      setErrors({})
+      setNotice(result.error)
+      return
+    }
     if (!result.ok) {
       setErrors({ form: result.error })
       return
@@ -86,6 +92,11 @@ function Signup() {
         </div>
 
         <form onSubmit={handleSubmit} noValidate>
+          {notice && (
+            <div className="mb-4 rounded-lg bg-blue-50 text-brand-blue text-sm px-4 py-2.5" role="status">
+              {notice}
+            </div>
+          )}
           {errors.form && (
             <div className="mb-4 rounded-lg bg-red-50 text-red-700 text-sm px-4 py-2.5">
               {errors.form}
