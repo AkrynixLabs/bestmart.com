@@ -19,6 +19,7 @@ import { formatCedis } from '../utils/money'
  */
 function Profile() {
   const { user, updateUser } = useAuth()
+  const userId = user?.id
   const [form, setForm] = useState({
     name: user?.name || '',
     phone: user?.phone || '',
@@ -31,7 +32,7 @@ function Profile() {
   const [ordersLoading, setOrdersLoading] = useState(true)
 
   useEffect(() => {
-    if (!user) return
+    if (!userId) return
     let active = true
 
     api.get('/orders').then((result) => {
@@ -43,7 +44,7 @@ function Profile() {
     return () => {
       active = false
     }
-  }, [user?.id])
+  }, [userId])
 
   const handleChange = (e) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }))

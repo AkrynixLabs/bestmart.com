@@ -6,8 +6,12 @@ import app from '../server/app.js'
 // sub-path along as ?__path=, so Express's own router (the mounted paths in
 // server/app.js) can do the real routing whether Vercel hands this function
 // the original URL or the rewritten one.
+/**
+ * @param {import('node:http').IncomingMessage} req
+ * @param {import('node:http').ServerResponse} res
+ */
 export default function handler(req, res) {
-  const url = new URL(req.url, 'http://localhost')
+  const url = new URL(req.url ?? '/', 'http://localhost')
   const originalPath = url.searchParams.get('__path')
   if (originalPath !== null) {
     url.searchParams.delete('__path')

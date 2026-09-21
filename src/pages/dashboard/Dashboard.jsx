@@ -9,12 +9,13 @@ import { formatCedis } from '../../utils/money'
 
 function Dashboard() {
   const { user } = useAuth()
+  const userId = user?.id
   const { products } = useProducts()
   const [ads] = useLocalStorageList(`bestmart_ads_${user?.id}`, [])
   const [orderStats, setOrderStats] = useState({ orderCount: 0, revenue: 0 })
 
   useEffect(() => {
-    if (!user) return
+    if (!userId) return
     let active = true
 
     api.get('/seller/stats').then((result) => {
@@ -24,7 +25,7 @@ function Dashboard() {
     return () => {
       active = false
     }
-  }, [user?.id])
+  }, [userId])
 
   const myProducts = products.filter((p) => p.sellerAdded && p.sellerId === user?.id)
   const activeAds = ads.filter((ad) => ad.status === 'active')

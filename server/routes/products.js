@@ -1,19 +1,23 @@
 import { Router } from 'express'
 import { supabaseAdmin } from '../lib/supabaseAdmin.js'
-import { authenticate, loadProfile, requireSeller } from '../middleware/auth.js'
-import { asyncHandler } from '../lib/asyncHandler.js'
-import { parseProductId } from '../lib/catalog.js'
-import { handleImageUpload, isHttpsUrl } from '../lib/imageUpload.js'
-import { categories } from '../../src/data/products.js'
+import { sellerOnly } from '../middleware/auth.js'
+import { handleImageUpload } from '../lib/imageUpload.js'
+import { validate } from '../common/validate.js'
+import { badRequest, dbError, forbidden, notFound } from '../common/errors.js'
+import { rateLimit } from '../common/rateLimit.js'
+import { ProductCreate, ProductIdParams, ProductUpdate, checkOriginalPrice } from '../../shared/schemas/catalog.js'
+
+/** @typedef {import('../lib/rows.js').ProductRow} ProductRow */
 
 const router = Router()
 
-const MAX_IMAGES = 10
-const MAX_NAME_LENGTH = 120
+const uploadLimit = rateLimit({ name: 'product-images', limit: 30, windowMs: 10 * 60_000 })
 
-// products table (snake_case) <-> API response (camelCase). Every row here
-// was, by construction, added by a seller — sellerAdded:true distinguishes
-// them from the static demo catalog that stays purely client-side.
+/**
+ * products row (snake_case) -> API response (camelCase). sellerAdded:true
+ * distinguishes DB products from the static demo catalog.
+ * @param {ProductRow} row
+ */
 function rowToProduct(row) {
   return {
     id: row.id,
@@ -25,160 +29,97 @@ function rowToProduct(row) {
     price: Number(row.price),
     oldPrice: row.old_price != null ? Number(row.old_price) : undefined,
     images: row.images ?? [],
-    rating: row.rating ?? undefined,
+    rating: row.rating != null ? Number(row.rating) : undefined,
     isNew: row.is_new,
     bestSeller: row.best_seller,
   }
 }
 
-const isPositiveMoney = (n) => typeof n === 'number' && Number.isFinite(n) && n > 0 && n < 10_000_000
-const roundMoney = (n) => Math.round(n * 100) / 100
-
 /**
- * Validates a create (partial=false) or update (partial=true) body and maps
- * it to a products row. Only seller-editable fields are accepted: rating,
- * isNew and bestSeller are platform-controlled, and seller/seller_id come
- * from the authenticated profile, not the body.
+ * Validated camelCase input -> products columns (only the keys provided).
+ * @param {import('../../shared/schemas/catalog.js').ProductUpdateInput} input
  */
-function validateProductBody(body, { partial, currentPrice }) {
+function inputToRow(input) {
+  /** @type {Partial<ProductRow>} */
   const row = {}
-  const has = (key) => body[key] !== undefined
-
-  if (!partial || has('name')) {
-    const name = typeof body.name === 'string' ? body.name.trim() : ''
-    if (!name) return { error: 'Product name is required' }
-    if (name.length > MAX_NAME_LENGTH) return { error: `Product name must be at most ${MAX_NAME_LENGTH} characters` }
-    row.name = name
-  }
-
-  if (!partial || has('category')) {
-    if (!categories.includes(body.category)) return { error: 'Choose a valid category' }
-    row.category = body.category
-  }
-
-  if (!partial || has('price')) {
-    const price = Number(body.price)
-    if (!isPositiveMoney(price)) return { error: 'Enter a valid price' }
-    row.price = roundMoney(price)
-  }
-
-  if ('oldPrice' in body) {
-    if (body.oldPrice === null || body.oldPrice === '' || body.oldPrice === undefined) {
-      row.old_price = null
-    } else {
-      const oldPrice = Number(body.oldPrice)
-      const price = row.price ?? currentPrice
-      if (!isPositiveMoney(oldPrice) || (price != null && oldPrice <= price)) {
-        return { error: 'Original price must be higher than the current price' }
-      }
-      row.old_price = roundMoney(oldPrice)
-    }
-  }
-
-  if (!partial || has('images')) {
-    const images = body.images ?? []
-    if (
-      !Array.isArray(images) ||
-      images.length > MAX_IMAGES ||
-      !images.every(isHttpsUrl)
-    ) {
-      return { error: `images must be a list of up to ${MAX_IMAGES} uploaded image URLs` }
-    }
-    row.images = images
-  }
-
-  return { row }
+  if (input.name !== undefined) row.name = input.name
+  if (input.category !== undefined) row.category = input.category
+  if (input.price !== undefined) row.price = input.price
+  if (input.oldPrice !== undefined) row.old_price = input.oldPrice
+  if (input.images !== undefined) row.images = input.images
+  return row
 }
 
-// GET /api/products — public, no auth. Anyone browsing the shop needs this.
-router.get(
-  '/',
-  asyncHandler(async (req, res) => {
-    const { data, error } = await supabaseAdmin.from('products').select('*').order('created_at', { ascending: true })
-    if (error) return res.status(500).json({ error: error.message })
-    res.json((data ?? []).map(rowToProduct))
-  })
-)
-
-// POST /api/products/images — any seller. Proxies the file to Supabase
-// Storage server-side (multer buffers it in memory; nothing touches disk).
-// Scoped to the seller's own folder, not a specific product — photos are
-// uploaded while filling out the "Add Product" form, before the product
-// exists.
-router.post(
-  '/images',
-  authenticate,
-  loadProfile,
-  requireSeller,
-  ...handleImageUpload
-)
-
-// POST /api/products — seller only.
-router.post(
-  '/',
-  authenticate,
-  loadProfile,
-  requireSeller,
-  asyncHandler(async (req, res) => {
-    const { row, error: validationError } = validateProductBody(req.body ?? {}, { partial: false })
-    if (validationError) return res.status(400).json({ error: validationError })
-
-    const sellerName = req.profile.business_name || req.profile.name || 'BestMart Seller'
-    const { data, error } = await supabaseAdmin
-      .from('products')
-      .insert({ ...row, seller_id: req.userId, seller: sellerName, is_new: true })
-      .select()
-      .single()
-    if (error) return res.status(400).json({ error: error.message })
-    res.status(201).json(rowToProduct(data))
-  })
-)
-
-// Ownership check shared by PATCH/DELETE below.
-const loadOwnedProduct = asyncHandler(async (req, res, next) => {
-  const id = parseProductId(req.params.id)
-  if (!id) return res.status(404).json({ error: 'Product not found' })
-  const { data, error } = await supabaseAdmin.from('products').select('id, seller_id, price').eq('id', id).maybeSingle()
-  if (error) return res.status(500).json({ error: error.message })
-  if (!data) return res.status(404).json({ error: 'Product not found' })
-  if (data.seller_id !== req.userId) return res.status(403).json({ error: 'Not your product' })
-  req.product = data
-  next()
+// GET /api/products — public. Anyone browsing the shop needs this.
+router.get('/', async (_req, res) => {
+  const { data, error } = await supabaseAdmin.from('products').select('*').order('created_at', { ascending: true })
+  if (error) throw dbError('list products', error)
+  res.json(/** @type {ProductRow[]} */ (data ?? []).map(rowToProduct))
 })
 
-// PATCH /api/products/:id — seller, owner only.
+// POST /api/products/images — any seller. Photos are uploaded while filling
+// in the product form, before the product exists, so they're scoped to the
+// seller's folder rather than a product.
+router.post('/images', ...sellerOnly, uploadLimit, ...handleImageUpload)
+
+// POST /api/products — seller only. seller name, seller_id and is_new are
+// set here from the authenticated profile, never from the body.
+router.post('/', ...sellerOnly, validate(ProductCreate), async (req, res) => {
+  const input = /** @type {import('../../shared/schemas/catalog.js').ProductCreateInput} */ (req.body)
+  const sellerName = req.profile.business_name || req.profile.name || 'BestMart Seller'
+  const { data, error } = await supabaseAdmin
+    .from('products')
+    .insert({ ...inputToRow(input), seller_id: req.userId, seller: sellerName, is_new: true })
+    .select()
+    .single()
+  if (error) throw dbError('create product', error)
+  res.status(201).json(rowToProduct(data))
+})
+
+/**
+ * Ownership check shared by PATCH/DELETE: sets req.product or 403/404s.
+ * @type {import('express').RequestHandler}
+ */
+const loadOwnedProduct = async (req, _res, next) => {
+  const { id } = /** @type {{ id: number }} */ (/** @type {unknown} */ (req.params))
+  const { data, error } = await supabaseAdmin.from('products').select('*').eq('id', id).maybeSingle()
+  if (error) throw dbError('load product', error)
+  if (!data) throw notFound('Product not found')
+  if (data.seller_id !== req.userId) throw forbidden('Not your product')
+  req.product = data
+  next()
+}
+
+// PATCH /api/products/:id — owner only.
 router.patch(
   '/:id',
-  authenticate,
-  loadProfile,
-  requireSeller,
+  ...sellerOnly,
+  validate(ProductIdParams, 'params'),
   loadOwnedProduct,
-  asyncHandler(async (req, res) => {
-    const { row, error: validationError } = validateProductBody(req.body ?? {}, {
-      partial: true,
-      currentPrice: Number(req.product.price),
-    })
-    if (validationError) return res.status(400).json({ error: validationError })
-    if (Object.keys(row).length === 0) return res.status(400).json({ error: 'Nothing to update' })
+  validate(ProductUpdate),
+  async (req, res) => {
+    const input = /** @type {import('../../shared/schemas/catalog.js').ProductUpdateInput} */ (req.body)
+    const row = inputToRow(input)
+    if (Object.keys(row).length === 0) throw badRequest('Nothing to update')
+
+    // Cross-field rule against the merged (new or stored) values.
+    const price = input.price ?? Number(req.product.price)
+    const oldPrice =
+      input.oldPrice !== undefined ? input.oldPrice : req.product.old_price != null ? Number(req.product.old_price) : null
+    const priceProblem = checkOriginalPrice(oldPrice, price)
+    if (priceProblem) throw badRequest(priceProblem)
 
     const { data, error } = await supabaseAdmin.from('products').update(row).eq('id', req.product.id).select().single()
-    if (error) return res.status(400).json({ error: error.message })
+    if (error) throw dbError('update product', error)
     res.json(rowToProduct(data))
-  })
+  }
 )
 
-// DELETE /api/products/:id — seller, owner only.
-router.delete(
-  '/:id',
-  authenticate,
-  loadProfile,
-  requireSeller,
-  loadOwnedProduct,
-  asyncHandler(async (req, res) => {
-    const { error } = await supabaseAdmin.from('products').delete().eq('id', req.product.id)
-    if (error) return res.status(400).json({ error: error.message })
-    res.status(204).end()
-  })
-)
+// DELETE /api/products/:id — owner only.
+router.delete('/:id', ...sellerOnly, validate(ProductIdParams, 'params'), loadOwnedProduct, async (req, res) => {
+  const { error } = await supabaseAdmin.from('products').delete().eq('id', req.product.id)
+  if (error) throw dbError('delete product', error)
+  res.status(204).end()
+})
 
 export default router

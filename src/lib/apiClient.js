@@ -1,6 +1,6 @@
 import { supabase } from './supabaseClient'
 
-const BASE = '/api'
+const BASE = '/api/v1'
 
 // `token` lets a caller pass an access token it already has in hand
 // (e.g. straight from signUp()/signInWithPassword()'s own return value)
@@ -40,7 +40,11 @@ async function request(method, path, body, { isFormData = false, token } = {}) {
   }
 
   if (!res.ok) {
-    return { ok: false, error: payload?.error || `Request failed (${res.status})` }
+    let error = payload?.error || `Request failed (${res.status})`
+    // Server-side failures carry a request id that matches the API logs;
+    // showing a short reference lets support find the exact failure.
+    if (res.status >= 500 && payload?.requestId) error += ` (ref ${String(payload.requestId).slice(0, 8)})`
+    return { ok: false, status: res.status, code: payload?.code, error }
   }
   return { ok: true, data: payload }
 }

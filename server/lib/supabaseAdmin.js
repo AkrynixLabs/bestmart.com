@@ -1,24 +1,19 @@
 import { createClient } from '@supabase/supabase-js'
+import { getEnv } from '../config/env.js'
+
+/** @typedef {import('@supabase/supabase-js').SupabaseClient} SupabaseClient */
 
 const CLIENT_OPTIONS = { auth: { autoRefreshToken: false, persistSession: false } }
 
-// Read lazily (at first use, not at import time). Throwing at import time
-// crashes the whole serverless function before Express can respond, which
-// Vercel reports only as an opaque FUNCTION_INVOCATION_FAILED. Throwing on
-// first use instead lands in Express's error handler as a normal JSON 500,
-// and the message shows up in the function logs.
+// Config is read lazily through getEnv() (first use, not import time) so a
+// missing variable becomes a JSON 500 with a clear log line instead of
+// crashing the serverless function at import. See config/env.js.
 function readEnv() {
-  const supabaseUrl = process.env.SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error(
-      'Missing server env vars. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY ' +
-        '(Supabase Dashboard -> Project Settings -> API) — see .env.example.'
-    )
-  }
-  return { supabaseUrl, serviceRoleKey }
+  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = getEnv()
+  return { supabaseUrl: SUPABASE_URL, serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY }
 }
 
+/** @type {SupabaseClient | null} */
 let adminClient = null
 function getAdminClient() {
   if (!adminClient) {
@@ -38,15 +33,17 @@ function getAdminClient() {
 //
 // Used for plain data queries (.from(...)) only — NOT for .auth.getUser(),
 // which needs a fresh client per call (see createAuthClient below).
-export const supabaseAdmin = new Proxy(
-  {},
+export const supabaseAdmin = /** @type {SupabaseClient} */ (
+  new Proxy(
+  /** @type {SupabaseClient} */ ({}),
   {
     get(_target, prop) {
       const client = getAdminClient()
-      const value = client[prop]
+      const value = Reflect.get(client, prop)
       return typeof value === 'function' ? value.bind(client) : value
     },
   }
+  )
 )
 
 // A fresh, throwaway client for verifying one request's token via

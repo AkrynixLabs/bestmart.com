@@ -10,12 +10,13 @@ const STATUS_FLOW = ['Processing', 'Shipped', 'Delivered']
 
 function Orders() {
   const { user } = useAuth()
+  const userId = user?.id
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!user) return
+    if (!userId) return
     let active = true
 
     api.get('/seller/orders').then((result) => {
@@ -28,7 +29,7 @@ function Orders() {
     return () => {
       active = false
     }
-  }, [user?.id])
+  }, [userId])
 
   const advanceStatus = async (id) => {
     setError('')

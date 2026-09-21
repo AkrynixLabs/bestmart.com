@@ -1,35 +1,36 @@
 import { Router } from 'express'
 import { supabaseAdmin } from '../lib/supabaseAdmin.js'
 import { authenticate } from '../middleware/auth.js'
-import { asyncHandler } from '../lib/asyncHandler.js'
+import { dbError } from '../common/errors.js'
 
 const router = Router()
 router.use(authenticate)
 
+/**
+ * @param {{ snapshot: import('../lib/rows.js').ProductSnapshot, product_id: number, qty: number, price: number | string }} row
+ */
 function rowToLineItem(row) {
-  return { ...row.snapshot, id: row.product_id, qty: row.qty, price: row.price }
+  return { ...row.snapshot, id: row.product_id, qty: row.qty, price: Number(row.price) }
 }
 
 // GET /api/orders — the caller's own purchase history (as a buyer).
-router.get(
-  '/',
-  asyncHandler(async (req, res) => {
-    const { data, error } = await supabaseAdmin
-      .from('orders')
-      .select('id, created_at, status, total, order_items(id, product_id, price, qty, snapshot)')
-      .eq('user_id', req.userId)
-      .order('created_at', { ascending: false })
-    if (error) return res.status(500).json({ error: error.message })
+router.get('/', async (req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from('orders')
+    .select('id, created_at, status, total, order_items(id, product_id, price, qty, snapshot)')
+    .eq('user_id', req.userId)
+    .order('created_at', { ascending: false })
+  if (error) throw dbError('list orders', error)
 
-    const shaped = (data ?? []).map((o) => ({
+  res.json(
+    (data ?? []).map((o) => ({
       id: o.id,
       createdAt: o.created_at,
       status: o.status,
-      total: o.total,
+      total: Number(o.total),
       items: o.order_items.map(rowToLineItem),
     }))
-    res.json(shaped)
-  })
-)
+  )
+})
 
 export default router

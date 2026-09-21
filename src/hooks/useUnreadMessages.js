@@ -12,10 +12,11 @@ import { api } from '../lib/apiClient'
  */
 export function useUnreadMessages() {
   const { user } = useAuth()
+  const userId = user?.id
   const [hasUnread, setHasUnread] = useState(false)
 
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       setHasUnread(false)
       return
     }
@@ -42,7 +43,7 @@ export function useUnreadMessages() {
       active = false
       supabase.removeChannel(channel)
     }
-  }, [user?.id])
+  }, [userId])
 
   return hasUnread
 }

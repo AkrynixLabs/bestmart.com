@@ -1,51 +1,19 @@
 import { Router } from 'express'
 import { supabaseAdmin } from '../lib/supabaseAdmin.js'
 import { authenticate } from '../middleware/auth.js'
-import { asyncHandler } from '../lib/asyncHandler.js'
-import { handleImageUpload, isHttpsUrl } from '../lib/imageUpload.js'
+import { handleImageUpload } from '../lib/imageUpload.js'
+import { validate } from '../common/validate.js'
+import { dbError } from '../common/errors.js'
+import { rateLimit } from '../common/rateLimit.js'
+import { ProfileUpdate } from '../../shared/schemas/profile.js'
+
+/** @typedef {import('../lib/rows.js').ProfileRow} ProfileRow */
 
 const router = Router()
 router.use(authenticate)
 
-// Editable text fields: API (camelCase) -> profiles column, with a max
-// length. `email` is deliberately absent — it's owned by Supabase Auth and
-// always written from the verified token, so a user can't display someone
-// else's address. `isSeller` is handled separately below.
-const TEXT_FIELDS = {
-  name: ['name', 100],
-  businessName: ['business_name', 120],
-  businessCategory: ['business_category', 60],
-  businessAddress: ['business_address', 200],
-  storeDescription: ['store_description', 1000],
-  businessLogo: ['business_logo', 2048],
-  phone: ['phone', 30],
-}
-
-function validateProfileBody(body) {
-  const row = {}
-  for (const [key, [column, maxLength]] of Object.entries(TEXT_FIELDS)) {
-    if (body[key] === undefined) continue
-    if (body[key] === null) {
-      row[column] = null
-      continue
-    }
-    if (typeof body[key] !== 'string') return { error: `${key} must be text` }
-    const value = body[key].trim()
-    if (value.length > maxLength) return { error: `${key} must be at most ${maxLength} characters` }
-    row[column] = value || null
-  }
-  if ('name' in row && !row.name) return { error: 'Name is required' }
-  if (row.business_logo && !isHttpsUrl(row.business_logo)) return { error: 'Upload the logo image first' }
-
-  if (body.isSeller !== undefined) {
-    if (typeof body.isSeller !== 'boolean') return { error: 'isSeller must be true or false' }
-    row.is_seller = body.isSeller
-  }
-  return { row }
-}
-
+/** @param {ProfileRow} row */
 function rowToUser(row) {
-  if (!row) return null
   return {
     id: row.id,
     name: row.name,
@@ -60,15 +28,43 @@ function rowToUser(row) {
   }
 }
 
+/** API field -> profiles column, for the editable fields. */
+const COLUMNS = /** @type {const} */ ({
+  name: 'name',
+  businessName: 'business_name',
+  businessCategory: 'business_category',
+  businessAddress: 'business_address',
+  storeDescription: 'store_description',
+  businessLogo: 'business_logo',
+  phone: 'phone',
+  isSeller: 'is_seller',
+})
+
+/** @param {import('../../shared/schemas/profile.js').ProfileUpdateInput} input */
+function inputToRow(input) {
+  /** @type {Record<string, unknown>} */
+  const row = {}
+  for (const [field, column] of Object.entries(COLUMNS)) {
+    const value = input[/** @type {keyof typeof COLUMNS} */ (field)]
+    if (value !== undefined) row[column] = value
+  }
+  return row
+}
+
+/** @param {string} email */
 const defaultName = (email) => (email || 'user').split('@')[0]
 
+/** @param {unknown} value @param {number} maxLength */
 const metadataText = (value, maxLength) =>
   typeof value === 'string' && value.trim() ? value.trim().slice(0, maxLength) : null
 
-// The first profile row for an account, using what the signup form stored
-// in user_metadata (see AuthContext.registerAccount) when available.
+/**
+ * The first profile row for an account, from what the signup form stored in
+ * user_metadata (see AuthContext.registerAccount) when available.
+ * @param {import('express').Request} req
+ */
 function initialProfileRow(req) {
-  const meta = req.userMetadata || {}
+  const meta = req.userMetadata
   return {
     id: req.userId,
     email: req.userEmail,
@@ -78,63 +74,51 @@ function initialProfileRow(req) {
   }
 }
 
+/** @param {string} userId @returns {Promise<ProfileRow | null>} */
 async function findProfile(userId) {
   const { data, error } = await supabaseAdmin.from('profiles').select('*').eq('id', userId).maybeSingle()
-  if (error) throw error
+  if (error) throw dbError('find profile', error)
   return data
 }
 
-// GET /api/profile — fetch own profile. Auto-creates a minimal default row
-// if one doesn't exist yet (first login after an email-confirm signup, when
-// no session existed at signup time to create it). Upsert with
-// ignoreDuplicates makes a race with a concurrent signup PATCH harmless: if
-// the PATCH's real values land first, they are kept, not overwritten.
-router.get(
-  '/',
-  asyncHandler(async (req, res) => {
-    let profile = await findProfile(req.userId)
-    if (!profile) {
-      const { error } = await supabaseAdmin
-        .from('profiles')
-        .upsert(initialProfileRow(req), { onConflict: 'id', ignoreDuplicates: true })
-      if (error) return res.status(500).json({ error: error.message })
-      profile = await findProfile(req.userId)
-    }
-    res.json(rowToUser(profile))
-  })
-)
-
-// PATCH /api/profile — create-or-update own profile in one call. Signup
-// calls this directly with the submitted values; Settings/Profile call it
-// for partial edits.
-router.patch(
-  '/',
-  asyncHandler(async (req, res) => {
-    const { row, error: validationError } = validateProfileBody(req.body ?? {})
-    if (validationError) return res.status(400).json({ error: validationError })
-
-    const existing = await findProfile(req.userId)
-    const fullRow = {
-      // Defaults only matter when the row doesn't exist yet (name is NOT NULL).
-      ...(existing ? {} : initialProfileRow(req)),
-      ...row,
-      id: req.userId,
-      email: req.userEmail,
-    }
-
-    const { data, error } = await supabaseAdmin
+// GET /api/profile — own profile. Creates a default row on first login
+// after an email-confirmed signup. ignoreDuplicates makes a race with a
+// concurrent signup PATCH harmless (the PATCH's real values are kept).
+router.get('/', async (req, res) => {
+  let profile = await findProfile(req.userId)
+  if (!profile) {
+    const { error } = await supabaseAdmin
       .from('profiles')
-      .upsert(fullRow, { onConflict: 'id' })
-      .select()
-      .single()
-    if (error) return res.status(400).json({ error: error.message })
-    res.json(rowToUser(data))
-  })
-)
+      .upsert(initialProfileRow(req), { onConflict: 'id', ignoreDuplicates: true })
+    if (error) throw dbError('create profile', error)
+    profile = await findProfile(req.userId)
+  }
+  if (!profile) throw dbError('create profile', 'row missing after upsert')
+  res.json(rowToUser(profile))
+})
 
-// POST /api/profile/logo — multipart `file`. Stores the image and returns
-// { url }; the client then saves that URL via PATCH /api/profile. Keeps
-// multi-megabyte images out of JSON bodies (express.json() caps at 100KB).
-router.post('/logo', ...handleImageUpload)
+// PATCH /api/profile — create-or-update own profile. Email is always taken
+// from the verified token, never from the body.
+router.patch('/', validate(ProfileUpdate), async (req, res) => {
+  const row = inputToRow(req.body)
+  const existing = await findProfile(req.userId)
+  const fullRow = {
+    ...(existing ? {} : initialProfileRow(req)),
+    ...row,
+    id: req.userId,
+    email: req.userEmail,
+  }
+  const { data, error } = await supabaseAdmin.from('profiles').upsert(fullRow, { onConflict: 'id' }).select().single()
+  if (error) throw dbError('save profile', error)
+  res.json(rowToUser(data))
+})
+
+// POST /api/profile/logo — multipart `file`; returns { url } to save via
+// PATCH. Keeps images out of JSON bodies (capped at 100KB).
+router.post(
+  '/logo',
+  rateLimit({ name: 'profile-logo', limit: 20, windowMs: 10 * 60_000 }),
+  ...handleImageUpload
+)
 
 export default router
