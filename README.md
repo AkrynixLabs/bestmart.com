@@ -422,6 +422,21 @@ Starts Vite (`http://localhost:5173`) and the Express API (`http://localhost:300
 | `npm run dev:api` | Express API only (reads `.env`) |
 | `npm run build` | Production build of the front end into `dist/` |
 | `npm run preview` | Serve the production build locally (run `npm run dev:api` too for `/api`) |
+| `npm run lint` | ESLint over the whole repo |
+| `npm run typecheck` | TypeScript strict-mode check of `server/`, `api/`, `shared/` |
+| `npm test` | Vitest unit + integration tests (no network needed) |
+| `npm run check` | Lint, type-check, test and build: what CI runs |
+
+## Documentation
+
+| Doc | Contents |
+|---|---|
+| [docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md) | Architecture, stack decisions, modules |
+| [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md) | `/api/v1` conventions, errors, endpoints |
+| [docs/SECURITY.md](docs/SECURITY.md) | Trust boundaries, controls, known gaps |
+| [docs/ENVIRONMENT_SETUP.md](docs/ENVIRONMENT_SETUP.md) | Env vars, environments, quality checks |
+| [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Workflow and coding rules |
+| [docs/DEVELOPMENT_CHECKLIST.md](docs/DEVELOPMENT_CHECKLIST.md) | Roadmap status by phase |
 
 ---
 
