@@ -1,0 +1,39 @@
+// BestMart data model. Business rules behind these fields are in CLAUDE.md.
+// Conventions:
+//   - Money is always an Int in pesewas (GHS 12.50 = 1250), never a float/decimal.
+//   - Percentages are Ints in basis points (10% = 1000), so they stay exact.
+//   - Table names are snake_case plural via @@map; Prisma model names are PascalCase.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Platform settings (single row, id = 1). Every business-rule number lives
+// here so the Super Admin can change it without a deploy.
+// ---------------------------------------------------------------------------
+
+model PlatformSettings {
+  id                        Int      @id @default(1)
+  currency                  String   @default("GHS")
+  // Default commission on item price, in basis points (1000 = 10%).
+  commissionBps             Int      @default(1000)
+  // Stock held for an unpaid checkout before it's released.
+  stockReservationMinutes   Int      @default(30)
+  // A shipped sub-order auto-confirms as delivered after this many days.
+  autoConfirmDeliveryDays   Int      @default(7)
+  // Seller funds become available this many days after delivery confirmation.
+  payoutHoldDays            Int      @default(3)
+  // Window for faulty / not-as-described return requests after delivery.
+  returnWindowDays          Int      @default(7)
+  supportEmail              String?
+  supportPhone              String?
+  updatedAt                 DateTime @updatedAt
+
+  @@map("platform_settings")
+}
