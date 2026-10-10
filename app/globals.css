@@ -1,0 +1,106 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Brand palette from the BestMart logo:
+  - navy/blue = the cart + "B" (trust, structure: nav, links, primary actions)
+  - orange    = the price tag + "mart" wordmark (energy: CTAs, highlights, deals)
+  shadcn semantic tokens (primary, accent, ...) map onto these.
+*/
+:root {
+  --brand-navy: #0a1a3c;
+  --brand-blue-dark: #0f2f8f;
+  --brand-blue: #1d4ed8;
+  --brand-blue-light: #3b82f6;
+  --brand-orange-dark: #c2410c;
+  --brand-orange: #f97316;
+  --brand-orange-light: #fb923c;
+
+  --radius: 0.625rem;
+  --background: #ffffff;
+  --foreground: #0a1a3c;
+  --card: #ffffff;
+  --card-foreground: #0a1a3c;
+  --popover: #ffffff;
+  --popover-foreground: #0a1a3c;
+  --primary: var(--brand-blue);
+  --primary-foreground: #ffffff;
+  --secondary: #eef2fb;
+  --secondary-foreground: #0f2f8f;
+  --muted: #f4f6fa;
+  --muted-foreground: #556079;
+  --accent: var(--brand-orange);
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --border: #e2e7f0;
+  --input: #d5dce8;
+  --ring: var(--brand-blue-light);
+}
+
+.dark {
+  --background: #070f24;
+  --foreground: #e8edf8;
+  --card: #0c1733;
+  --card-foreground: #e8edf8;
+  --popover: #0c1733;
+  --popover-foreground: #e8edf8;
+  --primary: var(--brand-blue-light);
+  --primary-foreground: #ffffff;
+  --secondary: #13224a;
+  --secondary-foreground: #dbe4ff;
+  --muted: #101c3d;
+  --muted-foreground: #9aa6c2;
+  --accent: var(--brand-orange);
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;
+  --border: #1c2a52;
+  --input: #24345f;
+  --ring: var(--brand-blue-light);
+}
+
+@theme inline {
+  --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-blue-dark: var(--brand-blue-dark);
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-blue-light: var(--brand-blue-light);
+  --color-brand-orange-dark: var(--brand-orange-dark);
+  --color-brand-orange: var(--brand-orange);
+  --color-brand-orange-light: var(--brand-orange-light);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
