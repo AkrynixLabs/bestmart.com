@@ -4,11 +4,11 @@ A plain-language view of the rebuild, phase by phase. Current state and open dec
 
 The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working, deployable state, and is merged when the user is happy with it.
 
-## Phase 0 — Foundation
-- [ ] Next.js App Router + TypeScript strict + Tailwind v4 + shadcn/ui, BestMart brand tokens, logo, photos
-- [ ] Prisma 7 + Neon, env validation, Sentry, structured logging, security headers
-- [ ] ESLint, Vitest, Playwright, GitHub Actions CI (lint, type-check, test, build)
-- [ ] Remove the Vite SPA, Express API and Supabase code; update README and docs
+## Phase 0 — Foundation ✅ (built 2026-10-20; CI not yet run on GitHub)
+- [x] Next.js App Router + TypeScript strict + Tailwind v4 + shadcn/ui, BestMart brand tokens, logo, photos
+- [x] Prisma 7 (local Docker Postgres now, Neon later), env validation, Sentry, structured logging, security headers
+- [x] ESLint, Vitest, Playwright, GitHub Actions CI (lint, type-check, migrations, test, build, e2e, audit)
+- [x] Remove the Vite SPA, Express API and Supabase code; update README and docs
 
 ## Phase 1 — Accounts and identity
 - [ ] Auth.js: email + password (verification, reset) and Google sign-in; Resend email templates
@@ -68,3 +68,4 @@ The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working
 ## Log
 
 - **2026-09-29** — Plan agreed in principle: rebuild on TutorLane's stack, vetted B2C marketplace with escrow-style payouts, Ghana/GHS first, Flutter app after the web core. Awaiting go-ahead on this plan.
+- **2026-10-20** — Phase 0 done: the old app is replaced by a Next.js storefront shell (home page, error pages, health checks) with a database, tests on desktop and mobile sizes, and CI. Next: Phase 1, accounts and seller applications.

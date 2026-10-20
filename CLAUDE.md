@@ -45,10 +45,20 @@ Role and ownership checks are server-side on every page, action and route, never
 - **Mobile:** Flutter app in `bestmart_mobile/` (buyer-first), talking to `app/api/mobile/**`. Built after the web app's core is done.
 - **Hosting:** Vercel.
 
-## Current state (2026-09-29)
+## Current state (2026-10-20)
 
-- Working branch: `rebuild/nextjs`. `main` still has the old React 19 + Vite SPA, Express 5 API and Supabase (no live data, so nothing to migrate; only brand, design, photos and business rules carry over). The old code is removed on this branch as the Next.js app replaces it; it stays in git history.
-- Plan written, **awaiting the user's approval** before Phase 0 starts.
+- Working branch: `rebuild/nextjs`. `main` still has the old React + Vite + Express + Supabase app (no live data); this branch has replaced it, and the old code stays in git history.
+- **Phase 0 (foundation) built**: Next.js 16.4 shell (home, 404, error pages, robots, sitemap), Prisma 7 with `@prisma/adapter-pg` (works with local Docker Postgres and Neon alike, unlike TutorLane's Neon WebSocket adapter), `PlatformSettings` single-row model, env/logger/money helpers, Sentry 11 (off without DSN), security headers, health routes, Vitest + Playwright, CI. Details in `docs/build-log.md`.
+- Local database: Docker Postgres 17 on `127.0.0.1:5433` (`npm run db:up`). The `platform_settings_singleton` migration still needs `npm run db:migrate` locally (auto mode blocked Claude from running migrations).
+- Not yet: CI run on GitHub, Vercel deployment.
+- `notes/` (git-ignored) holds the user's personal reference notes: strategy, business rules, their to-do list, tech decisions. Keep `notes/03-your-todo.md` current when open items change.
+
+## Gotchas
+
+- Sentry 11: `withSentryConfig` is imported from `@sentry/nextjs/config`; privacy is set with `dataCollection` (no `sendDefaultPii`/`enableLogs`). Shared options in `lib/sentry-options.ts`.
+- npm 10.8 crashes (`edgesOut`) resolving Vitest's peers on install; use `npx npm@11 install <pkg>`. npm 11 gates install scripts via `allowScripts` in `package.json`. `npm ci` works on both.
+- `server-only` is aliased to an empty module in `vitest.config.mts` so server modules can be unit-tested.
+- Prisma blocks `migrate reset` for AI agents without user consent; never edit an applied migration, add a new one.
 
 ## Conventions
 
