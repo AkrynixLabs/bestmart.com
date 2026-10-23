@@ -19,21 +19,241 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model PlatformSettings {
-  id                        Int      @id @default(1)
-  currency                  String   @default("GHS")
+  id                      Int      @id @default(1)
+  currency                String   @default("GHS")
   // Default commission on item price, in basis points (1000 = 10%).
-  commissionBps             Int      @default(1000)
+  commissionBps           Int      @default(1000)
   // Stock held for an unpaid checkout before it's released.
-  stockReservationMinutes   Int      @default(30)
+  stockReservationMinutes Int      @default(30)
   // A shipped sub-order auto-confirms as delivered after this many days.
-  autoConfirmDeliveryDays   Int      @default(7)
+  autoConfirmDeliveryDays Int      @default(7)
   // Seller funds become available this many days after delivery confirmation.
-  payoutHoldDays            Int      @default(3)
+  payoutHoldDays          Int      @default(3)
   // Window for faulty / not-as-described return requests after delivery.
-  returnWindowDays          Int      @default(7)
-  supportEmail              String?
-  supportPhone              String?
-  updatedAt                 DateTime @updatedAt
+  returnWindowDays        Int      @default(7)
+  supportEmail            String?
+  supportPhone            String?
+  updatedAt               DateTime @updatedAt
 
   @@map("platform_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+enum Role {
+  customer
+  seller
+  ops_admin
+  super_admin
+}
+
+enum UserStatus {
+  active
+  suspended
+}
+
+model User {
+  id              String     @id @default(cuid())
+  // Always stored lower-cased and trimmed (see lib/validation/auth.ts).
+  email           String     @unique
+  name            String
+  phone           String?
+  // Null for Google-only accounts.
+  passwordHash    String?
+  googleId        String?    @unique
+  // Self-signups can't log in with a password until this is set.
+  emailVerifiedAt DateTime?
+  role            Role       @default(customer)
+  status          UserStatus @default(active)
+  lastLoginAt     DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  authTokens           AuthToken[]
+  addresses            Address[]
+  sellerApplications   SellerApplication[] @relation("applicant")
+  reviewedApplications SellerApplication[] @relation("reviewer")
+  store                Store?
+  auditLogs            AuditLog[]
+
+  @@map("users")
+}
+
+enum AuthTokenPurpose {
+  verify_email
+  reset_password
+}
+
+// Single-use, expiring tokens for email verification and password reset.
+// Only a SHA-256 hash is stored; the raw token exists only in the emailed link.
+model AuthToken {
+  id        String           @id @default(cuid())
+  userId    String
+  purpose   AuthTokenPurpose
+  tokenHash String           @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@map("auth_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Addresses
+// ---------------------------------------------------------------------------
+
+enum GhanaRegion {
+  greater_accra
+  ashanti
+  western
+  western_north
+  central
+  eastern
+  volta
+  oti
+  northern
+  savannah
+  north_east
+  upper_east
+  upper_west
+  bono
+  bono_east
+  ahafo
+}
+
+model Address {
+  id            String      @id @default(cuid())
+  userId        String
+  label         String? // e.g. "Home", "Office"
+  recipientName String
+  phone         String
+  region        GhanaRegion
+  city          String // town / city, e.g. "Accra", "Tema", "Kumasi"
+  area          String // neighbourhood / suburb, e.g. "East Legon"
+  streetAddress String?
+  landmark      String? // "Opposite the Shell filling station"
+  gpsAddress    String? // GhanaPost GPS digital address, e.g. "GA-123-4567"
+  isDefault     Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+// ---------------------------------------------------------------------------
+// Sellers
+// ---------------------------------------------------------------------------
+
+enum SellerApplicationStatus {
+  pending
+  approved
+  rejected
+}
+
+enum BusinessType {
+  individual
+  registered_business
+}
+
+enum PayoutMethod {
+  mobile_money
+  bank_account
+}
+
+// A customer's request to become a seller. A user may re-apply after a
+// rejection, but only one application can be pending at a time (partial
+// unique index in the migration).
+model SellerApplication {
+  id                         String                  @id @default(cuid())
+  userId                     String
+  storeName                  String
+  businessType               BusinessType
+  businessRegistrationNumber String?
+  // KYC. The card image lives in the private Blob store; only admins can
+  // fetch it, through an authorised route.
+  ghanaCardNumber            String
+  ghanaCardImageKey          String
+  phone                      String
+  region                     GhanaRegion
+  city                       String
+  categoriesNote             String? // what they plan to sell
+  payoutMethod               PayoutMethod
+  payoutProvider             String // "MTN", "Telecel", "AirtelTigo" or the bank's name
+  payoutAccountName          String
+  payoutAccountNumber        String
+  status                     SellerApplicationStatus @default(pending)
+  reviewedById               String?
+  reviewedAt                 DateTime?
+  rejectionReason            String?
+  createdAt                  DateTime                @default(now())
+  updatedAt                  DateTime                @updatedAt
+
+  user       User   @relation("applicant", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User?  @relation("reviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  store      Store?
+
+  @@index([status, createdAt])
+  @@index([userId])
+  @@map("seller_applications")
+}
+
+enum StoreStatus {
+  active
+  suspended
+}
+
+// Created when an application is approved. Payout details are copied from
+// the application; the Paystack transfer recipient is created in Phase 4.
+model Store {
+  id                  String       @id @default(cuid())
+  userId              String       @unique
+  applicationId       String       @unique
+  slug                String       @unique
+  name                String
+  description         String?
+  logoUrl             String?
+  phone               String
+  region              GhanaRegion
+  city                String
+  status              StoreStatus  @default(active)
+  payoutMethod        PayoutMethod
+  payoutProvider      String
+  payoutAccountName   String
+  payoutAccountNumber String
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  user        User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  application SellerApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+
+  @@map("stores")
+}
+
+// ---------------------------------------------------------------------------
+// Audit log: who did what to which record. Append-only.
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String // e.g. "seller_application.approved"
+  entityType String
+  entityId   String
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
 }
