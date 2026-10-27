@@ -4,6 +4,8 @@ import { Search } from "lucide-react"
 
 import { site } from "@/lib/site"
 
+import { UserMenu } from "./user-menu"
+
 export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -25,12 +27,13 @@ export function SiteHeader() {
         </div>
 
         <nav aria-label="Main" className="ml-auto flex items-center gap-1 text-sm font-medium">
-          <Link href="/#categories" className="rounded-md px-3 py-2 hover:bg-muted">
+          <Link href="/#categories" className="hidden rounded-md px-3 py-2 hover:bg-muted lg:inline-flex">
             Categories
           </Link>
-          <Link href="/#sell" className="rounded-md px-3 py-2 text-brand-orange-dark hover:bg-muted">
+          <Link href="/sell/apply" className="hidden rounded-md px-3 py-2 text-brand-orange-dark hover:bg-muted sm:inline-flex">
             Sell on {site.name}
           </Link>
+          <UserMenu />
         </nav>
       </div>
     </header>

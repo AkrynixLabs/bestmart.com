@@ -14,6 +14,7 @@ lib/generated
 coverage
 playwright-report
 test-results
+.vitest/
 blob-report
 
 # Logs
@@ -38,3 +39,6 @@ npm-debug.log*
 
 # Personal notes (kept out of git on purpose)
 notes/
+
+# Local dev data (email outbox, private uploads)
+.data
