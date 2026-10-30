@@ -1,4 +1,5 @@
 import Image from "next/image"
+import Link from "next/link"
 import { BadgeCheck, ShieldCheck, Smartphone, Truck } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -46,7 +47,7 @@ export default function HomePage() {
                 <a href="#categories">Browse categories</a>
               </Button>
               <Button asChild size="lg" variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10">
-                <a href="#sell">Become a seller</a>
+                <Link href="/sell/apply">Become a seller</Link>
               </Button>
             </div>
           </div>
@@ -119,12 +120,12 @@ export default function HomePage() {
             </ul>
           </div>
           <div className="rounded-xl border bg-card p-6 shadow-sm">
-            <p className="font-semibold">Seller applications open soon</p>
+            <p className="font-semibold">Seller applications are open</p>
             <p className="mt-2 text-sm text-muted-foreground">
               You&apos;ll need your Ghana Card, a phone number and a Mobile Money or bank account for payouts.
             </p>
-            <Button className="mt-5 w-full" disabled>
-              Apply to sell (opening soon)
+            <Button asChild className="mt-5 w-full">
+              <Link href="/sell/apply">Apply to sell</Link>
             </Button>
           </div>
         </div>

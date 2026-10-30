@@ -46,3 +46,8 @@ export function applyBps(amount: Pesewas, bps: number): Pesewas {
   if (!Number.isInteger(bps) || bps < 0) throw new RangeError(`Invalid basis points: ${bps}`)
   return Math.floor((amount * bps + 5000) / 10000)
 }
+
+/** 1000 -> "10", 1250 -> "12.5" (percentage text without the % sign). */
+export function formatBps(bps: number): string {
+  return String(bps / 100)
+}
