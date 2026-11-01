@@ -19,6 +19,7 @@ export default defineConfig({
   // Runs against a production build (`npm run build` first), which is what ships.
   webServer: {
     command: `npx next start -p ${port}`,
+    env: { E2E_TEST_MODE: "1" },
     url: `http://localhost:${port}/api/health`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

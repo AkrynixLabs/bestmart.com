@@ -16,6 +16,8 @@ env:
   DATABASE_URL: postgresql://bestmart:bestmart@localhost:5432/bestmart
   DIRECT_URL: postgresql://bestmart:bestmart@localhost:5432/bestmart
   NEXT_PUBLIC_APP_URL: http://localhost:3100
+  # CI-only value; real secrets live in Vercel's environment settings.
+  AUTH_SECRET: ci-only-auth-secret-not-used-anywhere-else-0123456789
 
 jobs:
   verify:
