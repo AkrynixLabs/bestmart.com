@@ -10,12 +10,12 @@ The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working
 - [x] ESLint, Vitest, Playwright, GitHub Actions CI (lint, type-check, migrations, test, build, e2e, audit)
 - [x] Remove the Vite SPA, Express API and Supabase code; update README and docs
 
-## Phase 1 — Accounts and identity
-- [ ] Auth.js: email + password (verification, reset) and Google sign-in; Resend email templates
-- [ ] Roles (`customer`, `seller`, `ops_admin`, `super_admin`) with server-side guards
-- [ ] Profile and saved addresses (region, city, area, landmark, GhanaPost GPS digital address, phone)
-- [ ] Seller application (store name, Ghana Card, phone, payout account; document upload to private Blob) → admin approval
-- [ ] Rate limiting (Upstash) on auth and sensitive actions; audit log table
+## Phase 1 — Accounts and identity ✅ (built 2026-11-02; Google sign-in untested until an OAuth client exists)
+- [x] Auth.js: email + password (verification, reset) and Google sign-in; Resend email templates
+- [x] Roles (`customer`, `seller`, `ops_admin`, `super_admin`) with server-side guards
+- [x] Profile and saved addresses (region, city, area, landmark, GhanaPost GPS digital address, phone)
+- [x] Seller application (store name, Ghana Card, phone, payout account; document upload to private Blob) → admin approval
+- [x] Rate limiting (Upstash) on auth and sensitive actions; audit log table
 
 ## Phase 2 — Catalog
 - [ ] Category tree in the database, seed data
@@ -69,3 +69,4 @@ The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working
 
 - **2026-09-29** — Plan agreed in principle: rebuild on TutorLane's stack, vetted B2C marketplace with escrow-style payouts, Ghana/GHS first, Flutter app after the web core. Awaiting go-ahead on this plan.
 - **2026-10-20** — Phase 0 done: the old app is replaced by a Next.js storefront shell (home page, error pages, health checks) with a database, tests on desktop and mobile sizes, and CI. Next: Phase 1, accounts and seller applications.
+- **2026-11-02** — Phase 1 done: people can create accounts (email confirmation, password reset, Google once configured), save delivery addresses, and apply to sell; admins review applications, see the Ghana Card privately, and approval creates the store. Next: Phase 2, the catalog.

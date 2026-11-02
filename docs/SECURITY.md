@@ -1,6 +1,6 @@
 # Security
 
-## In place (Phase 0)
+## In place (Phase 0-1)
 
 - **Security headers** on every response (`next.config.ts`): HSTS, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`; `X-Powered-By` removed.
 - **Validated configuration** (`lib/env.ts`); secrets are server-only (`server-only` import guard). Only `NEXT_PUBLIC_*` values reach the browser.
@@ -8,15 +8,22 @@
 - **Sentry privacy:** no request bodies, cookies or automatic user data.
 - **Health endpoints** don't leak error details.
 - **CI dependency audit** on runtime dependencies.
+- **Passwords:** bcrypt (cost 12), minimum 8 characters with a letter and a number. Unknown emails still run a dummy hash so response time doesn't reveal which accounts exist.
+- **No account enumeration:** sign-up, sign-in, resend-verification and forgot-password give the same response whether or not the email is registered (an existing account gets an email instead). Suspended/unverified status is only revealed after a correct password.
+- **Tokens:** email-verification (24 h) and reset (1 h) tokens are random, stored only as SHA-256 hashes, single-use (consumed atomically), and issuing a new one invalidates older ones. Verification needs a button press, so link scanners can't consume it.
+- **Sessions:** Auth.js JWT cookies, but every page, action and route re-reads role and status from the database, so suspensions and role changes apply immediately. `/admin` returns 404 to non-admins. Sign-in `callbackUrl` only accepts same-site paths.
+- **Rate limits** (Upstash, in-memory fallback in development): sign-in per IP and per email, sign-up, forgot-password, resend-verification, change-password, seller applications.
+- **Seller KYC:** Ghana Card images are type-checked by their content, not the file name (JPEG, PNG, WebP or PDF, max 5 MB), stored in a **private** Blob store under random keys, and served only through an admin-only route with `no-store` and a sandbox CSP; every view is audit-logged.
+- **Audit log** for role changes, application decisions and KYC document views.
+- **Test mode guard:** `E2E_TEST_MODE=1` (local outbox, local storage, no rate limits) is ignored when `VERCEL_ENV=production`, and production without Resend/Blob keys refuses to start those features rather than silently falling back.
 
 ## Planned
 
 | Phase | Control |
 |---|---|
-| 1 | Auth.js with hashed passwords, email verification, single-use reset tokens; role guards on every page/action; rate limiting (Upstash) on auth and sensitive actions; audit log |
-| 1 | Seller KYC documents in a **private** Blob store, served only through authorised routes |
 | 4 | Strict Content-Security-Policy with nonces (Paystack, Sentry origins) |
 | 4 | Paystack webhook signature verification, server-side re-verification, idempotent processing; no card data ever touches our servers (Paystack-hosted checkout) |
+| 6 | Admin audit log viewer; two-factor sign-in for admin accounts (proposed) |
 | 9 | Pre-launch review: OWASP checklist, dependency review, backup/restore drill |
 
 ## Known exceptions

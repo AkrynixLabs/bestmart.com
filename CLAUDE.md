@@ -45,12 +45,14 @@ Role and ownership checks are server-side on every page, action and route, never
 - **Mobile:** Flutter app in `bestmart_mobile/` (buyer-first), talking to `app/api/mobile/**`. Built after the web app's core is done.
 - **Hosting:** Vercel.
 
-## Current state (2026-10-20)
+## Current state (2026-11-02)
 
 - Working branch: `rebuild/nextjs`. `main` still has the old React + Vite + Express + Supabase app (no live data); this branch has replaced it, and the old code stays in git history.
 - **Phase 0 (foundation) built**: Next.js 16.4 shell (home, 404, error pages, robots, sitemap), Prisma 7 with `@prisma/adapter-pg` (works with local Docker Postgres and Neon alike, unlike TutorLane's Neon WebSocket adapter), `PlatformSettings` single-row model, env/logger/money helpers, Sentry 11 (off without DSN), security headers, health routes, Vitest + Playwright, CI. Details in `docs/build-log.md`.
-- Local database: Docker Postgres 17 on `127.0.0.1:5433` (`npm run db:up`). The `platform_settings_singleton` migration still needs `npm run db:migrate` locally (auto mode blocked Claude from running migrations).
-- Not yet: CI run on GitHub, Vercel deployment.
+- **Phase 1 (accounts and identity) built**: Auth.js v5 (Credentials + optional Google, JWT, no adapter), email verification and reset tokens, profile and addresses, seller applications with a private Ghana Card upload, admin review at `/admin` that creates the `Store` and promotes to `seller`, rate limits, audit log. Without service keys, email/files go to `.data/` (git-ignored) and rate limits are in-memory. Details in `docs/build-log.md`.
+- First admin: sign up, then `npx tsx scripts/set-role.ts <email> super_admin`.
+- Local database: Docker Postgres 17 on `127.0.0.1:5433` (`npm run db:up`), all migrations applied. Auto mode blocks Claude from running `prisma migrate deploy`; ask the user to run `npm run db:migrate` after adding a migration.
+- Not yet: CI run on GitHub (the user pushes; this machine has no GitHub credentials), Vercel deployment, Google sign-in tested.
 - `notes/` (git-ignored) holds the user's personal reference notes: strategy, business rules, their to-do list, tech decisions. Keep `notes/03-your-todo.md` current when open items change.
 
 ## Gotchas
@@ -59,6 +61,10 @@ Role and ownership checks are server-side on every page, action and route, never
 - npm 10.8 crashes (`edgesOut`) resolving Vitest's peers on install; use `npx npm@11 install <pkg>`. npm 11 gates install scripts via `allowScripts` in `package.json`. `npm ci` works on both.
 - `server-only` is aliased to an empty module in `vitest.config.mts` so server modules can be unit-tested.
 - Prisma blocks `migrate reset` for AI agents without user consent; never edit an applied migration, add a new one.
+- Run Vitest/Playwright with Node 24 (`export PATH=$HOME/.nvm/versions/node/v24.13.0/bin:$PATH`); the local default is Node 20, where Vitest 5 can't print failures.
+- Playwright reuses any server on port 3100: kill a stale `next-server` first. `E2E_TEST_MODE=1` (set by its webServer) forces the outbox, local storage and no rate limits on a production build; it's ignored when `VERCEL_ENV=production`.
+- Next.js renders a hidden `#__next-route-announcer__` with `role="alert"`; use `formMessage()` from `tests/e2e/helpers.ts` instead of `getByRole("alert")`.
+- Permission checks use `lib/auth/session.ts` (database re-read), never the JWT's role alone. Wrong-role pages call `notFound()`.
 
 ## Conventions
 
