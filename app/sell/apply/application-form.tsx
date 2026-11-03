@@ -5,6 +5,7 @@ import Link from "next/link"
 
 import { CheckboxField, FormMessage, SelectField, SubmitButton, TextAreaField, TextField } from "@/components/forms/form-fields"
 import { initialFormState } from "@/lib/actions/state"
+import { shrinkFileInput } from "@/lib/client/resize-image"
 import { ghanaRegions } from "@/lib/validation/common"
 import { MOBILE_MONEY_PROVIDERS } from "@/lib/validation/seller"
 
@@ -58,7 +59,8 @@ export function ApplicationForm({ defaults, commissionPercent }: { defaults: { p
           accept="image/jpeg,image/png,image/webp,application/pdf"
           required
           state={state}
-          hint="JPG, PNG, WebP or PDF, up to 5 MB. Only BestMart's review team can see it."
+          onChange={(e) => void shrinkFileInput(e.currentTarget)}
+          hint="A clear photo (we shrink it for you) or a PDF up to 4 MB. Only BestMart's review team can see it."
         />
       </fieldset>
 

@@ -15,9 +15,9 @@ import { checkRateLimit } from "@/lib/rate-limit"
 import { clientIp } from "@/lib/request"
 import { putPrivate } from "@/lib/storage"
 import { fieldErrors } from "@/lib/validation/common"
+import { EXTENSION, type UploadType } from "@/lib/validation/files"
 import { KYC_MAX_BYTES, sellerApplicationSchema, sniffKycType } from "@/lib/validation/seller"
 
-const EXTENSION = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "application/pdf": "pdf" } as const
 
 export async function submitSellerApplicationAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await actionUser()
@@ -34,11 +34,11 @@ export async function submitSellerApplicationAction(_prev: FormState, formData: 
   const errors = parsed.success ? {} : fieldErrors(parsed.error)
 
   let bytes: Uint8Array | null = null
-  let contentType: keyof typeof EXTENSION | null = null
+  let contentType: UploadType | null = null
   if (!(file instanceof File) || file.size === 0) {
     errors.ghanaCardImage = "Upload a clear photo or scan of your Ghana Card"
   } else if (file.size > KYC_MAX_BYTES) {
-    errors.ghanaCardImage = "The file must be 5 MB or smaller"
+    errors.ghanaCardImage = "The file must be 4 MB or smaller"
   } else {
     bytes = new Uint8Array(await file.arrayBuffer())
     contentType = sniffKycType(bytes)

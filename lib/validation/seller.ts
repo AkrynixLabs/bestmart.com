@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import { ghanaCardNumber, ghanaPhone, ghanaRegion, optionalText, requiredText } from "./common"
+import { MAX_UPLOAD_BYTES, sniffFileType } from "./files"
 
 export const MOBILE_MONEY_PROVIDERS = ["MTN", "Telecel", "AirtelTigo"] as const
 
@@ -43,16 +44,9 @@ export const rejectApplicationSchema = z.object({
   reason: requiredText("Reason", 500),
 })
 
-// Ghana Card image upload rules.
-export const KYC_MAX_BYTES = 5 * 1024 * 1024
+// Ghana Card upload rules. Photos are shrunk in the browser before upload.
+export const KYC_MAX_BYTES = MAX_UPLOAD_BYTES
 export const KYC_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"] as const
 
 /** Checks the file's leading bytes, so a renamed file can't pass as an image. */
-export function sniffKycType(bytes: Uint8Array): (typeof KYC_ALLOWED_TYPES)[number] | null {
-  const starts = (...sig: number[]) => sig.every((b, i) => bytes[i] === b)
-  if (starts(0xff, 0xd8, 0xff)) return "image/jpeg"
-  if (starts(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return "image/png"
-  if (starts(0x52, 0x49, 0x46, 0x46) && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) return "image/webp"
-  if (starts(0x25, 0x50, 0x44, 0x46, 0x2d)) return "application/pdf"
-  return null
-}
+export const sniffKycType = sniffFileType
