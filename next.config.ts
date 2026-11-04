@@ -14,6 +14,25 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  experimental: {
+    serverActions: {
+      // Photos are shrunk in the browser first (lib/client/resize-image.ts);
+      // this leaves room for one photo or a PDF plus form fields, under
+      // Vercel's 4.5 MB request limit.
+      bodySizeLimit: "4.5mb",
+    },
+  },
+  images: {
+    // Product photos: public Vercel Blob in production, /media/* (served
+    // from .data/public by a route handler) in local development.
+    remotePatterns: [{ protocol: "https", hostname: "*.public.blob.vercel-storage.com", pathname: "/**" }],
+    localPatterns: [
+      { pathname: "/images/**", search: "" },
+      { pathname: "/brand/**", search: "" },
+      { pathname: "/media/**", search: "" },
+    ],
+    qualities: [75],
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }]
   },
