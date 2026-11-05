@@ -51,3 +51,11 @@ export function applyBps(amount: Pesewas, bps: number): Pesewas {
 export function formatBps(bps: number): string {
   return String(bps / 100)
 }
+
+/** 1250 -> "12.50", for pre-filling an amount input (no symbol or separators). */
+export function toCediInput(amount: Pesewas): string {
+  assertPesewas(amount)
+  const sign = amount < 0 ? "-" : ""
+  const abs = Math.abs(amount)
+  return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, "0")}`
+}

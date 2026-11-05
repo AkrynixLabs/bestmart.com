@@ -9,12 +9,18 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-orange-dark">Admin</p>
-          <nav aria-label="Admin" className="mt-1 flex gap-4 text-sm font-medium">
+          <nav aria-label="Admin" className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm font-medium">
             <Link href="/admin" className="hover:text-primary">
               Overview
             </Link>
             <Link href="/admin/seller-applications" className="hover:text-primary">
               Seller applications
+            </Link>
+            <Link href="/admin/categories" className="hover:text-primary">
+              Categories
+            </Link>
+            <Link href="/admin/products" className="hover:text-primary">
+              Products
             </Link>
           </nav>
         </div>

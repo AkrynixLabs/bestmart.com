@@ -1,16 +1,20 @@
 import "server-only"
-import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
-import { get, put } from "@vercel/blob"
+import { del, get, put } from "@vercel/blob"
 
 import { allowDevFallbacks, env, isE2ETestMode } from "@/lib/env"
 
-// Private file storage (seller KYC documents). Files are never publicly
-// reachable: they're read back only through routes that check permissions.
-// Production uses a private Vercel Blob store; development without a Blob
-// token falls back to .data/private/ on disk (git-ignored).
+// File storage, two stores:
+//  - private (seller KYC documents): never publicly reachable, read back only
+//    through routes that check permissions.
+//  - public (product and category photos): served directly by URL.
+// Production uses Vercel Blob; development without tokens falls back to
+// .data/private/ and .data/public/ on disk (git-ignored), the latter served
+// at /media/* by app/media/[...key]/route.ts.
 
 const LOCAL_ROOT = path.join(process.cwd(), ".data", "private")
+export const LOCAL_PUBLIC_ROOT = path.join(process.cwd(), ".data", "public")
 
 function blobEnabled(): boolean {
   if (isE2ETestMode()) return false
@@ -19,9 +23,17 @@ function blobEnabled(): boolean {
   return false
 }
 
-function safeLocalPath(key: string): string {
-  const resolved = path.resolve(LOCAL_ROOT, key)
-  if (!resolved.startsWith(LOCAL_ROOT + path.sep)) throw new Error("Invalid storage key")
+function publicBlobToken(): string | null {
+  if (isE2ETestMode()) return null
+  const token = env().PUBLIC_BLOB_READ_WRITE_TOKEN
+  if (token) return token
+  if (!allowDevFallbacks()) throw new Error("PUBLIC_BLOB_READ_WRITE_TOKEN is required in production for photo uploads")
+  return null
+}
+
+export function safeLocalPath(key: string, root = LOCAL_ROOT): string {
+  const resolved = path.resolve(root, key)
+  if (!resolved.startsWith(root + path.sep)) throw new Error("Invalid storage key")
   return resolved
 }
 
@@ -32,9 +44,9 @@ export async function putPrivate(key: string, data: Uint8Array, contentType: str
     return result.pathname
   }
   const file = safeLocalPath(key)
-  await mkdir(path.dirname(file), { recursive: true })
-  await writeFile(file, data)
-  await writeFile(`${file}.type`, contentType)
+  await mkdir(/*turbopackIgnore: true*/ path.dirname(file), { recursive: true })
+  await writeFile(/*turbopackIgnore: true*/ file, data)
+  await writeFile(/*turbopackIgnore: true*/ `${file}.type`, contentType)
   return key
 }
 
@@ -46,9 +58,38 @@ export async function getPrivate(key: string): Promise<{ body: ReadableStream | 
   }
   try {
     const file = safeLocalPath(key)
-    const [body, contentType] = await Promise.all([readFile(file), readFile(`${file}.type`, "utf8")])
+    const [body, contentType] = await Promise.all([readFile(/*turbopackIgnore: true*/ file), readFile(/*turbopackIgnore: true*/ `${file}.type`, "utf8")])
     return { body: new Uint8Array(body), contentType }
   } catch {
     return null
   }
+}
+
+/** Stores a publicly readable file. Returns its URL and storage key. */
+export async function putPublic(key: string, data: Uint8Array, contentType: string): Promise<{ url: string; key: string }> {
+  const token = publicBlobToken()
+  if (token) {
+    const result = await put(key, Buffer.from(data), {
+      access: "public",
+      contentType,
+      addRandomSuffix: true,
+      token,
+      // Keys are unique per upload, so the file at a URL never changes.
+      cacheControlMaxAge: 60 * 60 * 24 * 365,
+    })
+    return { url: result.url, key: result.pathname }
+  }
+  const file = safeLocalPath(key, LOCAL_PUBLIC_ROOT)
+  await mkdir(/*turbopackIgnore: true*/ path.dirname(file), { recursive: true })
+  await writeFile(/*turbopackIgnore: true*/ file, data)
+  return { url: `/media/${key}`, key }
+}
+
+export async function deletePublic(key: string): Promise<void> {
+  const token = publicBlobToken()
+  if (token) {
+    await del(key, { token })
+    return
+  }
+  await rm(/*turbopackIgnore: true*/ safeLocalPath(key, LOCAL_PUBLIC_ROOT), { force: true })
 }
