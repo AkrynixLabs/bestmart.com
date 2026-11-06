@@ -60,3 +60,38 @@ export function setRole(email: string, role: "customer" | "ops_admin" | "super_a
 export function formMessage(page: Page, role: "alert" | "status" = "alert") {
   return page.getByRole(role).and(page.locator(":not(#__next-route-announcer__)"))
 }
+
+export const PASSWORD = "Accra2026pass"
+
+/** Signs up `seller`, applies to sell, and has `admin` (created if needed) approve it. Ends signed out. */
+export async function createApprovedSeller(page: Page, seller: { name: string; email: string }, admin: { name: string; email: string }, storeName: string) {
+  await signUpAndVerify(page, { ...seller, password: PASSWORD })
+  await logIn(page, seller.email, PASSWORD)
+  await page.goto("/sell/apply")
+  await page.getByLabel("Store name").fill(storeName)
+  await page.getByLabel("Business phone").fill("0241234567")
+  await page.getByLabel("Region").selectOption("greater_accra")
+  await page.getByLabel("Town or city").fill("Accra")
+  await page.getByLabel("Ghana Card number").fill("GHA-123456789-0")
+  await page.getByLabel(/Photo or scan of your Ghana Card/).setInputFiles("tests/e2e/fixtures/ghana-card.png")
+  await page.getByLabel("Network").selectOption("MTN")
+  await page.getByLabel("MoMo number").fill("0241234567")
+  await page.getByLabel(/I confirm these details/).check()
+  await page.getByRole("button", { name: "Submit application" }).click()
+  await expect(page.getByText("Your application is under review")).toBeVisible()
+  await logOut(page)
+
+  await signUpAndVerify(page, { ...admin, password: PASSWORD })
+  setRole(admin.email, "super_admin")
+  await logIn(page, admin.email, PASSWORD)
+  await page.goto("/admin/seller-applications")
+  await page.getByRole("link", { name: storeName }).click()
+  await page.getByRole("button", { name: "Approve and create store" }).click()
+  await expect(page.getByText("Application approved")).toBeVisible()
+  await logOut(page)
+}
+
+/** A status message containing `text` (pages can show several status banners at once). */
+export function statusWith(page: Page, text: string) {
+  return page.getByRole("status").filter({ hasText: text })
+}
