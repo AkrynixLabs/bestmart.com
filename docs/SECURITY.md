@@ -8,7 +8,7 @@
 - **Sentry privacy:** no request bodies, cookies or automatic user data.
 - **Health endpoints** don't leak error details.
 - **CI dependency audit** on runtime dependencies.
-- **Passwords:** bcrypt (cost 12), minimum 8 characters with a letter and a number. Unknown emails still run a dummy hash so response time doesn't reveal which accounts exist.
+- **Passwords:** bcrypt (cost 12, native `@node-rs/bcrypt` on a worker thread so hashing can't stall other requests), minimum 8 characters with a letter and a number. Unknown emails still run a dummy hash so response time doesn't reveal which accounts exist.
 - **No account enumeration:** sign-up, sign-in, resend-verification and forgot-password give the same response whether or not the email is registered (an existing account gets an email instead). Suspended/unverified status is only revealed after a correct password.
 - **Tokens:** email-verification (24 h) and reset (1 h) tokens are random, stored only as SHA-256 hashes, single-use (consumed atomically), and issuing a new one invalidates older ones. Verification needs a button press, so link scanners can't consume it.
 - **Sessions:** Auth.js JWT cookies, but every page, action and route re-reads role and status from the database, so suspensions and role changes apply immediately. `/admin` returns 404 to non-admins. Sign-in `callbackUrl` only accepts same-site paths.
@@ -32,6 +32,8 @@
 ## Known exceptions
 
 - **picomatch ReDoS advisory (GHSA-fc5q-39xc-vjpf), high, no fixed version (2026-10-20).** It comes in through `@sentry/nextjs` (its build-time Rollup plugin) and Vite/Vitest. picomatch only matches file globs from our own config during builds and tests; no user input reaches it, so it isn't exploitable here. CI audits at `critical` until a fixed version exists; then return to `high`.
+
+- **zod advisory (GHSA-mrhx-c7xc-m3w5), high (2026-11-06).** Our own `zod` is fixed (4.6.7); an old copy nested under `@vercel/blob` → `@vercel/oidc` → `@vercel/cli-config` is forced to the same version with an npm `overrides` entry. Drop the override when upstream updates.
 
 ## Reporting
 

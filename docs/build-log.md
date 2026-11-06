@@ -72,3 +72,14 @@ What was built in each session and how it was verified. Newest at the bottom.
 - Not covered by e2e yet: deleting/moving categories with subcategories, deleting attributes with values, archive/restore, photo reordering and deletion, unblock.
 - The first e2e run after a server start was flaky until the expect timeout went to 10 s: `bcryptjs` hashing blocks the event loop. A native bcrypt is an open decision.
 - Rating filter and sort wait for reviews (Phase 7). Store name search uses `ILIKE` (fine at current scale).
+
+## 2026-11-06: Native password hashing
+
+**Changed** `bcryptjs` (pure JavaScript) to `@node-rs/bcrypt` (Rust via N-API). Each cost-12 hash used to block the Node event loop for roughly 0.3 s, so concurrent sign-ups/sign-ins delayed every other request (it showed up as flaky first-run e2e tests). Hashes now run on libuv worker threads; the hash format is unchanged.
+
+Also added an npm `overrides` entry so `@vercel/cli-config`'s nested `zod` uses our patched version (GHSA-mrhx-c7xc-m3w5).
+
+**Verified**
+- A password hash created earlier by `bcryptjs` verifies with the new library (wrong password rejected). 8 parallel cost-12 hashes: ~0.5 s total.
+- `npm run check` (Vitest 78/78), `next build`, and Playwright 26/26 on two cold runs **at the default 5 s expect timeout** (the 10 s workaround was removed); the suite went from ~53 s to ~33 s.
+- `npm audit --omit=dev`: 0 critical; only the documented picomatch exception remains at high.

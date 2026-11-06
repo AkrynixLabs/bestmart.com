@@ -79,7 +79,8 @@ Role and ownership checks are server-side on every page, action and route, never
 - Category/attribute changes must call `invalidateCategories()` (Server Actions only; it uses `updateTag`).
 - Generate migrations with `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, then check for unwanted `DROP`s. Prisma can't round-trip some index opclasses (e.g. `text_pattern_ops`), so declare indexes in the schema where possible and test new migrations on a scratch database (`bestmart_scratch`) for zero drift.
 - A form whose success removes it from the page (accepting a suggestion, blocking from a filtered list, or a keyed remount) loses its `useActionState` message: redirect with a status query param, or keep the state in a parent outside the key (see `variants-editor.tsx`).
-- `bcryptjs` blocks the event loop for ~0.3 s per hash; Playwright's expect timeout is 10 s because of it. A native/threaded bcrypt is an open decision.
+- Passwords use `@node-rs/bcrypt` (native, hashes on a worker thread; reads old `bcryptjs` hashes). Don't go back to pure-JS bcrypt: it blocked the event loop and made e2e flaky under parallel sign-ups.
+- `package.json` `overrides` forces `@vercel/cli-config`'s nested `zod` up to ours (GHSA-mrhx-c7xc-m3w5). Remove once `@vercel/blob` ships a fixed chain.
 - Next 16 needs `images.qualities` and `localPatterns`; local photos are served by `app/media/[...key]/route.ts` (dev/e2e only). Server Action bodies are capped at 4.5 MB (`next.config.ts`); photos are resized in the browser first.
 
 ## Conventions
@@ -92,7 +93,6 @@ Role and ownership checks are server-side on every page, action and route, never
 ## Open items (need the user)
 
 - [ ] Delivery zone fee amounts (GHS) for the four zones (needed for Phase 3).
-- [ ] Swap `bcryptjs` for a native, off-main-thread bcrypt (e.g. `@node-rs/bcrypt`; existing hashes stay valid) before launch?
 - [ ] Accounts: Neon, Paystack (needs a registered business for live keys), Resend + sending domain, Sentry, Upstash, Vercel project with two Blob stores (private for KYC, public for photos), Google OAuth client, domain name.
 - [ ] **Regulatory check:** holding buyer funds before paying sellers may fall under Bank of Ghana payment-services rules. Confirm with Paystack / a lawyer before going live; the fallback is Paystack split-at-charge (TutorLane's model) with refunds clawed back from future payouts.
 - [ ] Legal entity name for terms, privacy policy, seller agreement and returns policy; Data Protection Commission registration.
