@@ -13,11 +13,3 @@ export function appUrl(): string {
   return stripTrailingSlash(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000")
 }
 
-export const launchCategories = [
-  { slug: "electronics", name: "Electronics", image: "/images/categories/electronics.jpg" },
-  { slug: "fashion", name: "Fashion", image: "/images/categories/fashion.jpg" },
-  { slug: "beauty", name: "Beauty", image: "/images/categories/beauty.jpg" },
-  { slug: "home-living", name: "Home & Living", image: "/images/categories/home-living.jpg" },
-  { slug: "sports", name: "Sports", image: "/images/categories/sports.jpg" },
-  { slug: "groceries", name: "Groceries", image: "/images/categories/groceries.jpg" },
-] as const

@@ -2,8 +2,14 @@ import Image from "next/image"
 import Link from "next/link"
 import { BadgeCheck, ShieldCheck, Smartphone, Truck } from "lucide-react"
 
+import { connection } from "next/server"
+
+import { ProductGrid } from "@/components/catalog/product-card"
 import { Button } from "@/components/ui/button"
-import { launchCategories, site } from "@/lib/site"
+import { getCategoryTree } from "@/lib/catalog/categories"
+import { newArrivals } from "@/lib/catalog/products"
+import { childrenOf } from "@/lib/catalog/tree"
+import { site } from "@/lib/site"
 
 const promises = [
   {
@@ -28,7 +34,12 @@ const promises = [
   },
 ]
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Rendered per request: categories and new arrivals come from the database
+  // (the category tree itself is cached), so the build needs no database.
+  await connection()
+  const [tree, arrivals] = await Promise.all([getCategoryTree(), newArrivals(8)])
+  const categories = childrenOf(tree, null)
   return (
     <>
       <section className="relative overflow-hidden bg-brand-navy text-white">
@@ -85,23 +96,42 @@ export default function HomePage() {
         <h2 id="categories-heading" className="text-2xl font-bold tracking-tight sm:text-3xl">
           Shop by category
         </h2>
-        <p className="mt-2 text-muted-foreground">Products from our first verified sellers will appear here at launch.</p>
         <ul className="mt-8 grid grid-cols-2 gap-4 md:grid-cols-3">
-          {launchCategories.map((category) => (
-            <li key={category.slug} className="group relative aspect-[4/3] overflow-hidden rounded-xl bg-muted">
-              <Image
-                src={category.image}
-                alt=""
-                fill
-                sizes="(min-width: 768px) 33vw, 50vw"
-                className="object-cover transition-transform duration-300 group-hover:scale-105"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/85 via-brand-navy/20 to-transparent" />
-              <p className="absolute bottom-3 left-4 text-lg font-bold text-white">{category.name}</p>
+          {categories.map((category) => (
+            <li key={category.id}>
+              <Link href={`/c/${category.slug}`} className="group relative block aspect-[4/3] overflow-hidden rounded-xl bg-muted">
+                {category.imageUrl ? (
+                  <Image
+                    src={category.imageUrl}
+                    alt=""
+                    fill
+                    sizes="(min-width: 768px) 33vw, 50vw"
+                    className="object-cover transition-transform duration-300 group-hover:scale-105"
+                  />
+                ) : null}
+                <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/85 via-brand-navy/20 to-transparent" />
+                <p className="absolute bottom-3 left-4 text-lg font-bold text-white">{category.name}</p>
+              </Link>
             </li>
           ))}
         </ul>
       </section>
+
+      {arrivals.length > 0 ? (
+        <section aria-labelledby="arrivals-heading" className="mx-auto max-w-7xl px-4 pb-14 sm:px-6">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <h2 id="arrivals-heading" className="text-2xl font-bold tracking-tight sm:text-3xl">
+              New arrivals
+            </h2>
+            <Link href="/search" className="text-sm font-medium text-primary hover:underline">
+              Search everything
+            </Link>
+          </div>
+          <div className="mt-6">
+            <ProductGrid products={arrivals} />
+          </div>
+        </section>
+      ) : null}
 
       <section id="sell" aria-labelledby="sell-heading" className="scroll-mt-20 bg-secondary">
         <div className="mx-auto grid max-w-7xl items-center gap-8 px-4 py-14 sm:px-6 md:grid-cols-[1.2fr_1fr]">
