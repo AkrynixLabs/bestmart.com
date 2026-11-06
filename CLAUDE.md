@@ -62,13 +62,14 @@ Role and ownership checks are server-side on every page, action and route, never
 - **Phase 2 (catalog) built**: admin-managed category tree (`lib/catalog/tree.ts` pure helpers, `categories.ts` cached loader) with attributes, slug redirects and seller suggestions; seller product editor (photos, details + attributes, options/variants, publish checklist); admin moderation (block with reason); storefront `/c`, `/p`, `/s`, `/search` with filters, JSON-LD and a dynamic sitemap index. Search goes through `lib/search/` (Postgres FTS + pg_trgm, keyset cursors). Details in `docs/build-log.md`.
 - First admin: sign up, then `npx tsx scripts/set-role.ts <email> super_admin`.
 - Local database: Docker Postgres 17 on `127.0.0.1:5433` (`npm run db:up`), all migrations applied. `.claude/settings.local.json` (git-ignored) allows Claude to run `npm run db:migrate`; `prisma migrate reset` is denied.
-- Pushed to GitHub 2026-11-03 (the user pushes; this machine has no GitHub credentials). Not yet: CI result confirmed, Vercel deployment, Google sign-in tested.
+- Pushed to GitHub 2026-11-03 (the user pushes; this machine has no GitHub credentials); `main` fast-forwarded to `rebuild/nextjs` on 2026-11-06. CI status can be read without credentials from `https://api.github.com/repos/AkrynixLabs/bestmart.com/actions/runs` (logs need auth). Two Vercel projects (`bestmart`, `bestmart-com`) auto-deploy from the repo but have no env vars or database yet, so their builds fail by design until set up. Not yet: Google sign-in tested.
 - `notes/` (git-ignored) holds the user's personal reference notes: strategy, business rules, their to-do list, tech decisions. Keep `notes/03-your-todo.md` current when open items change.
 
 ## Gotchas
 
 - Sentry 11: `withSentryConfig` is imported from `@sentry/nextjs/config`; privacy is set with `dataCollection` (no `sendDefaultPii`/`enableLogs`). Shared options in `lib/sentry-options.ts`.
-- npm 10.8 crashes (`edgesOut`) resolving Vitest's peers on install; use `npx npm@11 install <pkg>`. npm 11 gates install scripts via `allowScripts` in `package.json`. `npm ci` works on both.
+- npm 10.8 crashes (`edgesOut`) resolving Vitest's peers on install. **Change dependencies with the npm that CI uses** (the one bundled with the latest Node 24, currently `npx -y npm@11.19.1 install <pkg>`): a lockfile written by older npm 11.6 broke `npm ci` on GitHub (missing `@emnapi/*` entries for `@node-rs/bcrypt`'s wasm fallback). Before committing a lockfile change, run `npx -y npm@11.19.1 ci` in a clean copy. npm 11 gates install scripts via `allowScripts`.
+- `engines.node` is `24.x` so Vercel doesn't jump to a new major (it picked Node 26 under `>=20.19`). `prisma.config.ts` only sets a datasource when `DIRECT_URL`/`DATABASE_URL` exists, so `prisma generate` (postinstall) works on Vercel/CI before env is configured.
 - `server-only` is aliased to an empty module in `vitest.config.mts` so server modules can be unit-tested.
 - Prisma blocks `migrate reset` for AI agents without user consent; never edit an applied migration, add a new one.
 - Run Vitest/Playwright with Node 24 (`export PATH=$HOME/.nvm/versions/node/v24.13.0/bin:$PATH`); the local default is Node 20, where Vitest 5 can't print failures.

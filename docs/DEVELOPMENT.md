@@ -65,4 +65,4 @@ Before calling work done: `npm run check` plus the relevant e2e tests.
 
 ## npm versions
 
-The lockfile was created with npm 11 (npm 10.8 has a bug resolving Vitest's optional peers on a fresh install). `npm ci` works with npm 10 and 11. If `npm install <pkg>` fails with `Cannot read properties of null (reading 'edgesOut')`, use `npx npm@11 install <pkg>`. npm 11 asks before running install scripts; the approved ones are listed under `allowScripts` in `package.json`.
+Use Node 24 (`engines` is `24.x`; Vercel and CI use the latest 24 release). Change dependencies with the npm version bundled with that release, currently 11.19.1: `npx -y npm@11.19.1 install <pkg>`. Newer npm is stricter about what the lockfile must contain, and a lockfile written by an older npm 11 once made `npm ci` fail on GitHub. Check a lockfile change with `npx -y npm@11.19.1 ci` in a clean copy before committing. `npm ci` also works with npm 10. npm 11 asks before running install scripts; the approved ones are listed under `allowScripts` in `package.json`.

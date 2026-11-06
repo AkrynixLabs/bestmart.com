@@ -83,3 +83,13 @@ Also added an npm `overrides` entry so `@vercel/cli-config`'s nested `zod` uses 
 - A password hash created earlier by `bcryptjs` verifies with the new library (wrong password rejected). 8 parallel cost-12 hashes: ~0.5 s total.
 - `npm run check` (Vitest 78/78), `next build`, and Playwright 26/26 on two cold runs **at the default 5 s expect timeout** (the 10 s workaround was removed); the suite went from ~53 s to ~33 s.
 - `npm audit --omit=dev`: 0 critical; only the documented picomatch exception remains at high.
+
+## 2026-11-06: CI and Vercel install fixes
+
+**Problem:** after pushing `main`, GitHub CI failed at `npm ci` and both Vercel projects failed at install.
+- CI runs the latest Node 24 (24.22.3, npm 11.19.1). That npm rejected the lockfile written by npm 11.6.2: `Missing: @emnapi/runtime@1.11.3, @emnapi/core@2.0.0-beta.2` (dependencies of `@node-rs/bcrypt`'s wasm fallback).
+- Vercel has no environment variables yet, and `prisma.config.ts` required `DIRECT_URL`, so `postinstall: prisma generate` aborted. Vercel also chose Node 26 because of `engines: >=20.19`.
+
+**Fixed:** regenerated the lockfile with npm 11.19.1; `prisma.config.ts` sets the datasource only when a URL exists; `engines.node` is `24.x`.
+
+**Verified:** clean `npm ci` with **no database env** on npm 11.19.1, 11.6.2 and 10.9.2 (Prisma client generated each time); `npm run check` (78/78), `next build`, Playwright 26/26. A build with no env at all now stops with a clear "Invalid environment configuration" list (intended: Vercel needs `DATABASE_URL`, `AUTH_SECRET` and the rest before it can deploy).
