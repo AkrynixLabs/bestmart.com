@@ -31,6 +31,8 @@ model PlatformSettings {
   payoutHoldDays          Int      @default(3)
   // Window for faulty / not-as-described return requests after delivery.
   returnWindowDays        Int      @default(7)
+  // A variant at or below this stock shows a low-stock flag to its seller.
+  lowStockThreshold       Int      @default(5)
   supportEmail            String?
   supportPhone            String?
   updatedAt               DateTime @updatedAt
@@ -73,10 +75,12 @@ model User {
 
   authTokens           AuthToken[]
   addresses            Address[]
-  sellerApplications   SellerApplication[] @relation("applicant")
-  reviewedApplications SellerApplication[] @relation("reviewer")
+  sellerApplications   SellerApplication[]  @relation("applicant")
+  reviewedApplications SellerApplication[]  @relation("reviewer")
   store                Store?
   auditLogs            AuditLog[]
+  reviewedSuggestions  CategorySuggestion[]
+  blockedProducts      Product[]            @relation("productBlocker")
 
   @@map("users")
 }
@@ -231,10 +235,238 @@ model Store {
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
-  user        User              @relation(fields: [userId], references: [id], onDelete: Restrict)
-  application SellerApplication @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  application         SellerApplication    @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  products            Product[]
+  categorySuggestions CategorySuggestion[]
 
   @@map("stores")
+}
+
+// ---------------------------------------------------------------------------
+// Catalog: categories (admin-managed tree), attributes, products, variants.
+// ---------------------------------------------------------------------------
+
+enum CategoryStatus {
+  active
+  hidden
+}
+
+// An admin-managed tree. `path` is the chain of ancestor ids including this
+// one ("/root/child/"), used to re-path a subtree when it moves. Reads use
+// the cached tree (lib/catalog/categories.ts); the table stays small.
+// The admin UI caps depth at 3 levels (0, 1, 2).
+model Category {
+  id             String         @id @default(cuid())
+  parentId       String?
+  name           String
+  slug           String         @unique
+  description    String?
+  imageUrl       String?
+  path           String
+  depth          Int            @default(0)
+  sortOrder      Int            @default(0)
+  status         CategoryStatus @default(active)
+  // Overrides PlatformSettings.commissionBps for this category and, unless
+  // they set their own, its subcategories.
+  commissionBps  Int?
+  seoTitle       String?
+  seoDescription String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  parent      Category?              @relation("categoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children    Category[]             @relation("categoryTree")
+  attributes  CategoryAttribute[]
+  products    Product[]
+  oldSlugs    CategorySlugRedirect[]
+  suggestions CategorySuggestion[]   @relation("suggestedParent")
+  createdFrom CategorySuggestion[]   @relation("createdCategory")
+
+  @@index([parentId, sortOrder])
+  @@map("categories")
+}
+
+// Old slugs keep working after a rename (301 to the current slug).
+model CategorySlugRedirect {
+  slug       String   @id
+  categoryId String
+  createdAt  DateTime @default(now())
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId])
+  @@map("category_slug_redirects")
+}
+
+enum AttributeType {
+  text
+  number
+  select
+  multiselect
+  boolean
+}
+
+// A field sellers fill in for products in this category and its
+// subcategories (e.g. Electronics > "Brand", Phones > "Storage").
+// `key` is unique along each root-to-leaf branch (checked in the app).
+model CategoryAttribute {
+  id           String        @id @default(cuid())
+  categoryId   String
+  key          String
+  name         String
+  type         AttributeType
+  unit         String? // e.g. "GB", "inches"
+  options      String[] // choices for select / multiselect
+  isRequired   Boolean       @default(false)
+  isFilterable Boolean       @default(true)
+  sortOrder    Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  category Category                @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  values   ProductAttributeValue[]
+
+  @@unique([categoryId, key])
+  @@map("category_attributes")
+}
+
+enum CategorySuggestionStatus {
+  pending
+  accepted
+  declined
+}
+
+model CategorySuggestion {
+  id                String                   @id @default(cuid())
+  storeId           String
+  parentId          String?
+  name              String
+  note              String?
+  status            CategorySuggestionStatus @default(pending)
+  response          String?
+  createdCategoryId String?
+  reviewedById      String?
+  reviewedAt        DateTime?
+  createdAt         DateTime                 @default(now())
+
+  store           Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  parent          Category? @relation("suggestedParent", fields: [parentId], references: [id], onDelete: SetNull)
+  createdCategory Category? @relation("createdCategory", fields: [createdCategoryId], references: [id], onDelete: SetNull)
+  reviewedBy      User?     @relation(fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([storeId])
+  @@map("category_suggestions")
+}
+
+enum ProductStatus {
+  draft
+  active
+  archived
+}
+
+// Visible to shoppers only when status = active, not blocked, and its store
+// and category (with every ancestor) are active. See lib/catalog/visibility.ts.
+model Product {
+  id            String                   @id @default(cuid())
+  storeId       String
+  categoryId    String
+  // Never changes after creation, so links and search results stay valid.
+  slug          String                   @unique
+  title         String
+  description   String
+  // Option types and their values, e.g. [{"name":"Size","values":["S","M"]}].
+  // Each variant holds one value per option, in the same order.
+  options       Json                     @default("[]")
+  status        ProductStatus            @default(draft)
+  publishedAt   DateTime?
+  // Moderation (moderate-after): an admin can block a listing with a reason.
+  blockedAt     DateTime?
+  blockedReason String?
+  blockedById   String?
+  // Kept in sync from active variants on every save, for listing,
+  // sorting and price filters without a join.
+  minPrice      Int                      @default(0)
+  maxPrice      Int                      @default(0)
+  totalStock    Int                      @default(0)
+  // Maintained by a database trigger (title weighted above description).
+  searchVector  Unsupported("tsvector")?
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  store           Store                   @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  category        Category                @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  blockedBy       User?                   @relation("productBlocker", fields: [blockedById], references: [id], onDelete: SetNull)
+  variants        ProductVariant[]
+  images          ProductImage[]
+  attributeValues ProductAttributeValue[]
+
+  @@index([storeId, status, updatedAt])
+  @@index([categoryId, status, publishedAt])
+  @@index([status, publishedAt])
+  @@index([searchVector], type: Gin)
+  // Typo-tolerant title matching (pg_trgm, enabled in the catalog migration).
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@map("products")
+}
+
+model ProductVariant {
+  id             String   @id @default(cuid())
+  productId      String
+  sku            String
+  optionValues   String[]
+  price          Int // pesewas
+  compareAtPrice Int? // pesewas, shown struck through when higher than price
+  stock          Int      @default(0)
+  isActive       Boolean  @default(true)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, sku])
+  @@unique([productId, optionValues])
+  @@map("product_variants")
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  productId String
+  url       String
+  // Storage pathname, used to delete the file.
+  key       String
+  alt       String?
+  width     Int?
+  height    Int?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, sortOrder])
+  @@map("product_images")
+}
+
+// One row per product per attribute. select/multiselect/text values go in
+// `textValues` (one element for text/select), so filtering is an indexed
+// array containment check.
+model ProductAttributeValue {
+  id           String   @id @default(cuid())
+  productId    String
+  attributeId  String
+  textValues   String[]
+  numberValue  Float?
+  booleanValue Boolean?
+
+  product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  attribute CategoryAttribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, attributeId])
+  @@index([attributeId, numberValue])
+  @@index([textValues], type: Gin)
+  @@map("product_attribute_values")
 }
 
 // ---------------------------------------------------------------------------
