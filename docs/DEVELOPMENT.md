@@ -13,6 +13,7 @@ Without service keys, development falls back to local stand-ins (never in produc
 | Vercel Blob, public store (product photos) | Files are stored in `.data/public/` and served at `/media/*` |
 | Upstash (rate limits) | In-memory limits, per server process |
 | Google sign-in | The button is hidden |
+| `CRON_SECRET` | `/api/cron/*` accepts unauthenticated requests (never in production) |
 
 `.data/` is git-ignored. `E2E_TEST_MODE=1` forces these fallbacks on a production build (Playwright sets it) and is ignored on Vercel production.
 

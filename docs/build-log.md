@@ -93,3 +93,29 @@ Also added an npm `overrides` entry so `@vercel/cli-config`'s nested `zod` uses 
 **Fixed:** regenerated the lockfile with npm 11.19.1; `prisma.config.ts` sets the datasource only when a URL exists; `engines.node` is `24.x`.
 
 **Verified:** clean `npm ci` with **no database env** on npm 11.19.1, 11.6.2 and 10.9.2 (Prisma client generated each time); `npm run check` (78/78), `next build`, Playwright 26/26. A build with no env at all now stops with a clear "Invalid environment configuration" list (intended: Vercel needs `DATABASE_URL`, `AUTH_SECRET` and the rest before it can deploy).
+
+## 2026-11-07: Phase 3, cart and checkout
+
+**Decided with the user:** delivery fees by distance (no paid map API: straight line between pins × 1.3, town-centre estimate when a pin is missing) priced by admin-editable distance bands with placeholder amounts; pins set on an OpenStreetMap map (Leaflet); an account is required to check out (browsing and the cart work signed out). Work moved to `main`.
+
+**Built**
+- **Data model** (migration `cart_and_orders`): map pins on `Address`, pickup area/pin on `Store`, `PlatformSettings.deliveryBands` (JSON) and `deliveryRoadFactorPct`, `Cart`/`CartItem`, `Order` (address snapshot, totals, `reservedUntil`, per-user idempotency key), `SubOrder` (per seller: items total, delivery fee, km, distance source), `OrderItem` (title/options/SKU/price/image snapshot plus commission bps). Hand-written CHECKs: pins in range and paired, cart has exactly one owner, quantities 1–99, totals add up (`grandTotal = itemsTotal + deliveryTotal`, `lineTotal = unitPrice × quantity`), road factor 100–300 %.
+- **Delivery** (`lib/delivery/`): haversine distance, band lookup with validation and a safe fallback, location resolution pin → neighbourhood → town → regional capital (whole-word, longest-name matching over ~100 places), quote source = the weaker end, shopper wording ("about 11 km, estimated between neighbourhoods").
+- **Maps:** `LocationPicker` (Leaflet loaded client-side, OSM tiles with attribution, tap to place, drag to adjust, "Use my location", remove pin; hidden lat/lng inputs; CSS pin, no image assets). Used in the address form (with a safe `returnTo=/checkout`) and the new seller **Pickup location** page. Pins are validated to lie inside Ghana.
+- **Cart:** guest cookie (`bm_cart`, httpOnly, random 24-byte token), merged into the account cart on the first request after sign-in; live availability/stock per line; quantities capped at stock and 20; header badge via `/api/cart`; "Add to cart" with quantity on product pages; sellers can't add their own products.
+- **Checkout** (`lib/checkout/orders.ts`): idempotent `placeOrder` locks variant rows in id order (`SELECT … FOR UPDATE`), re-checks availability, stock and own-store, re-prices, quotes delivery per seller, writes order + sub-orders + items, decrements stock, re-syncs product aggregates and clears the bought lines, all in one transaction. `releaseOrder` claims an unpaid order with a conditional update before returning stock (expiry or cancel).
+- **Pages:** `/cart`, `/checkout` (address picker, per-seller delivery with distance wording, total on the button), `/orders` and `/orders/[number]` (owner-only, countdown, cancel with a page-level confirmation), `/seller/settings`, `/admin/settings` (Super Admin only: bands editor, road factor, worked examples; audit-logged). Account menu and account sidebar link to Orders; `/checkout` and `/orders` require sign-in in `proxy.ts`.
+- **Expiry:** released before every checkout and when carts/orders are viewed; `/api/cron/release-reservations` (bearer `CRON_SECRET`, constant-time compare) scheduled daily in `vercel.json` (Vercel Hobby only allows daily crons; on Pro, run it every 5–15 minutes).
+
+**Verified**
+- `npm run check`: ESLint, tsc, Vitest 92/92 (14 new: distance, bands, place matching incl. whole-word cases, quote sources, cart rules, order numbers, pin validation). `next build` clean.
+- Migration chain on a scratch database: zero drift; then applied locally with `npm run db:migrate`.
+- Playwright 33/33 on two consecutive full runs. New desktop journey: seller sets a pickup area and lists a product (stock 3) and can't buy it → guest adds 2, the badge shows 2, over-stock is refused → checkout redirects to sign-in, sign-up keeps the guest cart → address saved with "Use my location" (mocked geolocation) → "about 11 km, estimated between neighbourhoods", total GH₵120 (2 × 45 + 30) → order placed, stock drops to 1 → cancel restores 3 → a second order expires via the cron route and restores stock → Super Admin changes band 3 to GH₵35 and the next checkout totals GH₵80 → another user gets 404 for the order, an ops admin gets 404 for settings. The phone-width check now includes `/cart`.
+
+**Not verified / notes**
+- No payment yet: orders stay "awaiting payment" until Phase 4.
+- Concurrency (two buyers racing for the last item) relies on the row locks; not load-tested yet (Phase 9).
+- The map itself (tile loading, dragging) isn't exercised by e2e; the "Use my location" path is.
+- Place coordinates are approximate (about 1 km); they only matter when a pin is missing.
+- Twice, during development, an earlier version of the band-change test hit the generic error page on the login screen with nothing in the server log. It hasn't recurred in five full runs since the test was restructured; not root-caused.
+- A test that changed the bands once left them modified after failing. Tests now reset delivery settings from a DB script before and after the suite.

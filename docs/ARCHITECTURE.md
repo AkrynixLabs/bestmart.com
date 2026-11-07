@@ -45,6 +45,13 @@ Prisma 7 with the `@prisma/adapter-pg` (node-postgres) driver adapter. The same 
 - **Search** goes through `lib/search/` (`CatalogSearch` interface). The Postgres implementation uses a trigger-maintained weighted `tsvector` plus `pg_trgm` word similarity, attribute filters as indexed `EXISTS` subqueries, and keyset pagination for browse sorts. A dedicated engine can replace it behind the same interface.
 - **URLs:** `/c/<slug>` (old slugs 301), `/p/<slug>` (never changes), `/s/<slug>`, `/search`. Sitemaps are an index plus 10,000-URL files built on request.
 
+## Cart, delivery and checkout
+
+- **Cart:** a guest cart is found by an httpOnly cookie token; after sign-in it's merged into the account cart in the database on the next request. Lines show live price, stock and availability.
+- **Delivery fee** (`lib/delivery/fee.ts`): one per seller sub-order. Distance is measured from the seller's pickup pin to the buyer's address pin (straight line × road factor). If either pin is missing, it falls back to neighbourhood, town or regional-capital centres from `lib/delivery/places.ts`; the quote records which source it used. Price comes from the admin-edited distance bands. Real road distances can replace this behind `quoteDelivery()`.
+- **Checkout** (`lib/checkout/orders.ts`): one transaction that locks the variant rows (`FOR UPDATE`, in id order to avoid deadlocks), re-checks and re-prices everything, writes the order, one sub-order per seller and snapshot line items, and reserves stock by decrementing it. A per-user idempotency key makes retries return the same order.
+- **Reservation expiry:** an unpaid order is claimed with a conditional status update before its stock is returned, so expiry, cancellation and (Phase 4) payment can't both succeed. Expired orders are released whenever someone checks out or views a cart or order, and by a cron backstop.
+
 ## Observability
 
 - `lib/logger.ts`: one-line JSON logs with key-based secret redaction (tokens, passwords, Ghana Card numbers).

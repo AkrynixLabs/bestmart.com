@@ -24,11 +24,11 @@ The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working
 - [x] Search (Postgres full-text + trigram), filters (category, price, attributes), sorting
 - [x] Seller dashboard: products and inventory, low-stock flags; admin product moderation
 
-## Phase 3 — Cart and checkout
-- [ ] Cart for guests (cookie) merged into the account on login
-- [ ] Delivery zones and fees (admin settings), address selection
-- [ ] Atomic checkout: re-price, reserve stock with row locks, create the order plus one sub-order per seller (`awaiting_payment`)
-- [ ] Reservation expiry job (Vercel Cron)
+## Phase 3 — Cart and checkout ✅ (built 2026-11-07; payment arrives in Phase 4)
+- [x] Cart for guests (cookie) merged into the account on login
+- [x] Distance-based delivery fees (seller pickup pin, buyer address pin, town-centre fallback, admin-editable bands), address selection
+- [x] Atomic checkout: re-price, reserve stock with row locks, create the order plus one sub-order per seller (`awaiting_payment`)
+- [x] Reservation expiry (released on checkout/cart/order views, plus a daily Vercel Cron backstop)
 
 ## Phase 4 — Payments and money
 - [ ] Paystack payment (MoMo + card); webhook with signature check, verification and idempotency
@@ -71,3 +71,4 @@ The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working
 - **2026-10-20** — Phase 0 done: the old app is replaced by a Next.js storefront shell (home page, error pages, health checks) with a database, tests on desktop and mobile sizes, and CI. Next: Phase 1, accounts and seller applications.
 - **2026-11-02** — Phase 1 done: people can create accounts (email confirmation, password reset, Google once configured), save delivery addresses, and apply to sell; admins review applications, see the Ghana Card privately, and approval creates the store. Next: Phase 2, the catalog.
 - **2026-11-06** — Phase 2 done: admins manage categories and their filters from the website; sellers list products with photos, sizes/colours and stock; shoppers browse, filter and search; admins can take listings down. Also fixed Ghana Card uploads over 1 MB. Next: Phase 3, cart and checkout (needs the delivery fees).
+- **2026-11-07** — Phase 3 done: shoppers fill a cart (signed in or not), add an address with a map pin, see a delivery fee worked out from distance, and place an order that holds the stock for 30 minutes; they can cancel, and unpaid orders expire. The Super Admin edits the delivery bands. Next: Phase 4, Paystack payments, commission and seller payouts.

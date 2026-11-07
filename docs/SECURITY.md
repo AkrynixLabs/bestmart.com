@@ -1,6 +1,6 @@
 # Security
 
-## In place (Phase 0-2)
+## In place (Phase 0-3)
 
 - **Security headers** on every response (`next.config.ts`): HSTS, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`; `X-Powered-By` removed.
 - **Validated configuration** (`lib/env.ts`); secrets are server-only (`server-only` import guard). Only `NEXT_PUBLIC_*` values reach the browser.
@@ -17,6 +17,10 @@
 - **Audit log** for role changes, application decisions, KYC document views, category/attribute changes, suggestion decisions and product blocks.
 - **Catalog uploads:** product and category photos are checked by content (JPEG/PNG/WebP), stored under random keys in a separate public store, limited to 8 per product and rate-limited per store. Browser-side resizing also drops photo metadata such as GPS location.
 - **Catalog authorization:** every seller action loads the product by id *and* the seller's store, so one seller can never read or change another's products; suspended stores can't edit. Drafts, blocked products and hidden categories return 404 to shoppers; only the owner and admins get a `noindex` preview. Commission overrides are Super Admin only.
+- **Checkout integrity:** prices, stock, availability and delivery fees are recomputed on the server inside the order transaction (variant rows locked); the browser only chooses an address it owns and sends an idempotency key, so a tampered form or a double-click can't change prices or create duplicate orders. Orders and addresses are always looked up with the owner in the query (another user's order number is a 404).
+- **Guest cart cookie:** random 24-byte token, httpOnly, SameSite=Lax, Secure in production; it only identifies a cart (no personal data).
+- **Delivery settings** are Super Admin only and audit-logged with before/after values; the cron route requires `CRON_SECRET` in production (constant-time comparison).
+- **Location data:** map pins are optional, validated to lie inside Ghana, and stored only on the user's own addresses and orders.
 - **Search input** is length-capped and passed as bound parameters (`Prisma.sql`), never concatenated into SQL. JSON-LD escapes `<`.
 - **Test mode guard:** `E2E_TEST_MODE=1` (local outbox, local storage, no rate limits) is ignored when `VERCEL_ENV=production`, and production without Resend/Blob keys refuses to start those features rather than silently falling back.
 
@@ -24,7 +28,7 @@
 
 | Phase | Control |
 |---|---|
-| 4 | Strict Content-Security-Policy with nonces (Paystack, Sentry origins) |
+| 4 | Strict Content-Security-Policy with nonces (Paystack, Sentry and `tile.openstreetmap.org` image origins) |
 | 4 | Paystack webhook signature verification, server-side re-verification, idempotent processing; no card data ever touches our servers (Paystack-hosted checkout) |
 | 6 | Admin audit log viewer; two-factor sign-in for admin accounts (proposed) |
 | 9 | Pre-launch review: OWASP checklist, dependency review, backup/restore drill |

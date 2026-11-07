@@ -17,7 +17,7 @@ BestMart is a Ghana-focused multi-vendor marketplace (shoppers buy from many ind
 | Rule | Value |
 |---|---|
 | Commission | 10% of item price *(default)*, with per-category overrides. Delivery fees aren't commissioned. Paystack's fee is borne by the platform out of the commission. |
-| Delivery | Seller fulfils (own rider or courier). Platform-defined delivery zones with a flat fee per seller sub-order; the fee goes to the seller. Zones: Accra & Tema, Rest of Greater Accra, Kumasi, Rest of Ghana. Fee amounts: **placeholders until the user sets them**. Partner couriers are a later phase. |
+| Delivery | Seller fulfils (own rider or courier). **Distance-based fee per seller sub-order** (decided 2026-11-07), paid to the seller, not commissioned. Distance = straight line between the seller's pickup pin and the buyer's address pin × 1.3 road factor (no paid map API); if either pin is missing, the distance between town centres from a built-in Ghana towns table. Price from admin-editable **distance bands**; starting placeholders: 0–5 km GH₵15, 5–10 GH₵20, 10–20 GH₵30, 20–40 GH₵45, 40–100 GH₵70, 100–300 GH₵100, 300+ GH₵140 *(placeholders until the user sets real ones)*. Can upgrade to real road distance later behind the same function. Partner couriers are a later phase. |
 | Stock reservation | Stock is reserved at checkout for 30 minutes *(default)* while awaiting payment, then released. |
 | Delivery confirmation | Buyer confirms receipt, or it auto-confirms 7 days after the seller marks it shipped *(default)*. |
 | Payout hold | Seller funds become available 3 days after delivery confirmation *(default)*, if no dispute is open. |
@@ -56,13 +56,14 @@ Role and ownership checks are server-side on every page, action and route, never
 
 ## Current state (2026-11-07)
 
-- Working branch: `rebuild/nextjs`. `main` still has the old React + Vite + Express + Supabase app (no live data); this branch has replaced it, and the old code stays in git history.
+- Working branch: **`main`** (since 2026-11-06, at the user's request). The rebuild happened on `rebuild/nextjs`, now fully merged; the old React + Vite + Express + Supabase app stays in git history.
 - **Phase 0 (foundation) built**: Next.js 16.4 shell (home, 404, error pages, robots, sitemap), Prisma 7 with `@prisma/adapter-pg` (works with local Docker Postgres and Neon alike, unlike TutorLane's Neon WebSocket adapter), `PlatformSettings` single-row model, env/logger/money helpers, Sentry 11 (off without DSN), security headers, health routes, Vitest + Playwright, CI. Details in `docs/build-log.md`.
 - **Phase 1 (accounts and identity) built**: Auth.js v5 (Credentials + optional Google, JWT, no adapter), email verification and reset tokens, profile and addresses, seller applications with a private Ghana Card upload, admin review at `/admin` that creates the `Store` and promotes to `seller`, rate limits, audit log. Without service keys, email/files go to `.data/` (git-ignored) and rate limits are in-memory. Details in `docs/build-log.md`.
 - **Phase 2 (catalog) built**: admin-managed category tree (`lib/catalog/tree.ts` pure helpers, `categories.ts` cached loader) with attributes, slug redirects and seller suggestions; seller product editor (photos, details + attributes, options/variants, publish checklist); admin moderation (block with reason); storefront `/c`, `/p`, `/s`, `/search` with filters, JSON-LD and a dynamic sitemap index. Search goes through `lib/search/` (Postgres FTS + pg_trgm, keyset cursors). Details in `docs/build-log.md`.
+- **Phase 3 (cart and checkout) built**: guest/user carts (cookie `bm_cart`, merged into the account cart on sign-in, DB-only so it works while rendering), distance-based delivery (`lib/delivery/`: haversine × road factor, admin-editable bands, `places.ts` table of Ghanaian towns/neighbourhoods as fallback), OpenStreetMap pin picker (`components/maps/location-picker.tsx`, Leaflet 1.9), atomic checkout in `lib/checkout/orders.ts` (row locks `FOR UPDATE` by id, re-pricing, stock reserved by decrement, idempotency key per user, one `SubOrder` per seller, `OrderItem` snapshots incl. commission bps), expiry released lazily (checkout/cart/orders views) plus `/api/cron/release-reservations` (daily in `vercel.json`; Hobby plans only allow daily). Orders stay `awaiting_payment` until Phase 4 (Paystack). Details in `docs/build-log.md`.
 - First admin: sign up, then `npx tsx scripts/set-role.ts <email> super_admin`.
 - Local database: Docker Postgres 17 on `127.0.0.1:5433` (`npm run db:up`), all migrations applied. `.claude/settings.local.json` (git-ignored) allows Claude to run `npm run db:migrate`; `prisma migrate reset` is denied.
-- Pushed to GitHub 2026-11-03 (the user pushes; this machine has no GitHub credentials); `main` fast-forwarded to `rebuild/nextjs` on 2026-11-06. CI status can be read without credentials from `https://api.github.com/repos/AkrynixLabs/bestmart.com/actions/runs` (logs need auth). Two Vercel projects (`bestmart`, `bestmart-com`) auto-deploy from the repo but have no env vars or database yet, so their builds fail by design until set up. Not yet: Google sign-in tested.
+- Pushed to GitHub 2026-11-03 (the user pushes; this machine has no GitHub credentials); `main` fast-forwarded to `rebuild/nextjs` on 2026-11-06 and is the only working branch now. CI status can be read without credentials from `https://api.github.com/repos/AkrynixLabs/bestmart.com/actions/runs` (logs need auth). Two Vercel projects (`bestmart`, `bestmart-com`) auto-deploy from the repo but have no env vars or database yet, so their builds fail by design until set up. Not yet: Google sign-in tested.
 - `notes/` (git-ignored) holds the user's personal reference notes: strategy, business rules, their to-do list, tech decisions. Keep `notes/03-your-todo.md` current when open items change.
 
 ## Gotchas
@@ -82,6 +83,8 @@ Role and ownership checks are server-side on every page, action and route, never
 - A form whose success removes it from the page (accepting a suggestion, blocking from a filtered list, or a keyed remount) loses its `useActionState` message: redirect with a status query param, or keep the state in a parent outside the key (see `variants-editor.tsx`).
 - Passwords use `@node-rs/bcrypt` (native, hashes on a worker thread; reads old `bcryptjs` hashes). Don't go back to pure-JS bcrypt: it blocked the event loop and made e2e flaky under parallel sign-ups.
 - `package.json` `overrides` forces `@vercel/cli-config`'s nested `zod` up to ours (GHSA-mrhx-c7xc-m3w5). Remove once `@vercel/blob` ships a fixed chain.
+- Stock is reserved by decrementing `ProductVariant.stock` at checkout and given back by `releaseOrder()` (claims the order with a conditional update first). Any new path that changes order status must use the same claim-then-act pattern so payment (Phase 4) and expiry can't both win.
+- e2e tests that change global settings must restore them from a DB script in `beforeAll`/`afterAll` (`tests/e2e/support/reset-delivery.ts`): a timed-out test skips its own clean-up, and later runs then fail on the polluted value.
 - Next 16 needs `images.qualities` and `localPatterns`; local photos are served by `app/media/[...key]/route.ts` (dev/e2e only). Server Action bodies are capped at 4.5 MB (`next.config.ts`); photos are resized in the browser first.
 
 ## Conventions
@@ -93,7 +96,7 @@ Role and ownership checks are server-side on every page, action and route, never
 
 ## Open items (need the user)
 
-- [ ] Delivery zone fee amounts (GHS) for the four zones (needed for Phase 3).
+- [ ] Real delivery band amounts (placeholders are in settings until then).
 - [ ] Accounts: Neon, Paystack (needs a registered business for live keys), Resend + sending domain, Sentry, Upstash, Vercel project with two Blob stores (private for KYC, public for photos), Google OAuth client, domain name.
 - [ ] **Regulatory check:** holding buyer funds before paying sellers may fall under Bank of Ghana payment-services rules. Confirm with Paystack / a lawyer before going live; the fallback is Paystack split-at-charge (TutorLane's model) with refunds clawed back from future payouts.
 - [ ] Legal entity name for terms, privacy policy, seller agreement and returns policy; Data Protection Commission registration.
