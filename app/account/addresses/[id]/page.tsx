@@ -13,7 +13,7 @@ export default async function EditAddressPage({ params }: { params: Promise<{ id
   const user = await requireUser(`/account/addresses/${id}`)
   const address = await prisma.address.findFirst({ where: { id, userId: user.id } })
   if (!address) notFound()
-  const { label, recipientName, phone, region, city, area, streetAddress, landmark, gpsAddress, isDefault } = address
+  const { label, recipientName, phone, region, city, area, streetAddress, landmark, gpsAddress, isDefault, latitude, longitude } = address
   return (
     <section className="rounded-xl border bg-card p-6">
       <h1 className="text-xl font-bold">Edit address</h1>
@@ -31,6 +31,7 @@ export default async function EditAddressPage({ params }: { params: Promise<{ id
             landmark: landmark ?? "",
             gpsAddress: gpsAddress ?? "",
             isDefault,
+            pin: latitude !== null && longitude !== null ? { lat: latitude, lng: longitude } : null,
           }}
         />
       </div>

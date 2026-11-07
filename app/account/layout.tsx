@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth/session"
 
 const links = [
   { href: "/account", label: "Profile & security" },
+  { href: "/orders", label: "Orders" },
   { href: "/account/addresses", label: "Delivery addresses" },
   { href: "/sell/apply", label: "Sell on BestMart" },
 ]

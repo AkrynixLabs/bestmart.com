@@ -99,3 +99,24 @@ export function fieldErrors(error: z.ZodError): FieldErrors {
   }
   return out
 }
+
+/** Rough bounding box of Ghana (with a margin), for map pins. */
+export const GHANA_BOUNDS = { minLat: 4.5, maxLat: 11.3, minLng: -3.4, maxLng: 1.3 } as const
+
+/**
+ * An optional map pin from two form fields. Both empty = no pin; otherwise
+ * both must be numbers inside Ghana. Rounded to 6 decimals (~10 cm).
+ */
+export function parsePin(latitude: unknown, longitude: unknown): { ok: true; latitude: number | null; longitude: number | null } | { ok: false; error: string } {
+  const lat = typeof latitude === "string" ? latitude.trim() : ""
+  const lng = typeof longitude === "string" ? longitude.trim() : ""
+  if (!lat && !lng) return { ok: true, latitude: null, longitude: null }
+  const a = Number(lat)
+  const b = Number(lng)
+  if (!lat || !lng || !Number.isFinite(a) || !Number.isFinite(b)) return { ok: false, error: "The map pin is incomplete. Set it again or remove it." }
+  if (a < GHANA_BOUNDS.minLat || a > GHANA_BOUNDS.maxLat || b < GHANA_BOUNDS.minLng || b > GHANA_BOUNDS.maxLng) {
+    return { ok: false, error: "The map pin is outside Ghana. We only deliver within Ghana for now." }
+  }
+  const round = (n: number) => Math.round(n * 1e6) / 1e6
+  return { ok: true, latitude: round(a), longitude: round(b) }
+}

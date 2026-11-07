@@ -16,7 +16,7 @@ import { checkRateLimit } from "@/lib/rate-limit"
 import { clientIp } from "@/lib/request"
 import { addressSchema } from "@/lib/validation/address"
 import { changePasswordSchema, profileSchema } from "@/lib/validation/auth"
-import { fieldErrors } from "@/lib/validation/common"
+import { fieldErrors, parsePin } from "@/lib/validation/common"
 
 const SIGNED_OUT: FormState = { error: "Your session has ended. Please sign in again." }
 const MAX_ADDRESSES = 10
@@ -63,9 +63,13 @@ export async function saveAddressAction(_prev: FormState, formData: FormData): P
   if (!user) return SIGNED_OUT
   const values = echoValues(formData)
   const parsed = addressSchema.safeParse(Object.fromEntries(formData))
-  if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error), values }
+  const pin = parsePin(formData.get("latitude"), formData.get("longitude"))
+  if (!parsed.success || !pin.ok) {
+    return { fieldErrors: { ...(parsed.success ? {} : fieldErrors(parsed.error)), ...(pin.ok ? {} : { latitude: pin.error }) }, values }
+  }
   const addressId = formData.get("addressId")
-  const { isDefault, ...data } = parsed.data
+  const { isDefault, ...fields } = parsed.data
+  const data = { ...fields, latitude: pin.latitude, longitude: pin.longitude }
 
   const result = await prisma.$transaction(async (tx) => {
     const count = await tx.address.count({ where: { userId: user.id } })
@@ -87,6 +91,9 @@ export async function saveAddressAction(_prev: FormState, formData: FormData): P
   if (result === "not_found") return { error: "That address no longer exists.", values }
   if (result === "limit") return { error: `You can save up to ${MAX_ADDRESSES} addresses. Remove one first.`, values }
   revalidatePath("/account/addresses")
+  revalidatePath("/checkout")
+  // Only one fixed destination is accepted, so this can't become an open redirect.
+  if (formData.get("returnTo") === "/checkout") redirect("/checkout")
   redirect("/account/addresses?saved=1")
 }
 
