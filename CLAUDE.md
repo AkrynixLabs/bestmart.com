@@ -54,7 +54,7 @@ Role and ownership checks are server-side on every page, action and route, never
 - **Mobile:** Flutter app in `bestmart_mobile/` (buyer-first), talking to `app/api/mobile/**`. Built after the web app's core is done.
 - **Hosting:** Vercel.
 
-## Current state (2026-11-06)
+## Current state (2026-11-07)
 
 - Working branch: `rebuild/nextjs`. `main` still has the old React + Vite + Express + Supabase app (no live data); this branch has replaced it, and the old code stays in git history.
 - **Phase 0 (foundation) built**: Next.js 16.4 shell (home, 404, error pages, robots, sitemap), Prisma 7 with `@prisma/adapter-pg` (works with local Docker Postgres and Neon alike, unlike TutorLane's Neon WebSocket adapter), `PlatformSettings` single-row model, env/logger/money helpers, Sentry 11 (off without DSN), security headers, health routes, Vitest + Playwright, CI. Details in `docs/build-log.md`.

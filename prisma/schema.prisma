@@ -33,6 +33,12 @@ model PlatformSettings {
   returnWindowDays        Int      @default(7)
   // A variant at or below this stock shows a low-stock flag to its seller.
   lowStockThreshold       Int      @default(5)
+  // Delivery fee bands by road distance, ascending:
+  // [{ "upToKm": 5, "feePesewas": 1500 }, ..., { "upToKm": null, "feePesewas": 14000 }].
+  // Validated in lib/delivery/fee.ts; the last band has no upper limit.
+  deliveryBands           Json     @default("[{\"upToKm\":5,\"feePesewas\":1500},{\"upToKm\":10,\"feePesewas\":2000},{\"upToKm\":20,\"feePesewas\":3000},{\"upToKm\":40,\"feePesewas\":4500},{\"upToKm\":100,\"feePesewas\":7000},{\"upToKm\":300,\"feePesewas\":10000},{\"upToKm\":null,\"feePesewas\":14000}]")
+  // Straight-line distance x this factor (percent) approximates the road route.
+  deliveryRoadFactorPct   Int      @default(130)
   supportEmail            String?
   supportPhone            String?
   updatedAt               DateTime @updatedAt
@@ -75,6 +81,8 @@ model User {
 
   authTokens           AuthToken[]
   addresses            Address[]
+  cart                 Cart?
+  orders               Order[]
   sellerApplications   SellerApplication[]  @relation("applicant")
   reviewedApplications SellerApplication[]  @relation("reviewer")
   store                Store?
@@ -142,6 +150,10 @@ model Address {
   streetAddress String?
   landmark      String? // "Opposite the Shell filling station"
   gpsAddress    String? // GhanaPost GPS digital address, e.g. "GA-123-4567"
+  // Map pin (WGS84), for distance-based delivery fees. Optional: without
+  // it, the area/town centre is used (lib/delivery/towns.ts).
+  latitude      Float?
+  longitude     Float?
   isDefault     Boolean     @default(false)
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -228,6 +240,10 @@ model Store {
   region              GhanaRegion
   city                String
   status              StoreStatus  @default(active)
+  // Pickup point for delivery distance. Optional: falls back to the area/town centre.
+  pickupArea          String?
+  pickupLatitude      Float?
+  pickupLongitude     Float?
   payoutMethod        PayoutMethod
   payoutProvider      String
   payoutAccountName   String
@@ -239,6 +255,7 @@ model Store {
   application         SellerApplication    @relation(fields: [applicationId], references: [id], onDelete: Restrict)
   products            Product[]
   categorySuggestions CategorySuggestion[]
+  subOrders           SubOrder[]
 
   @@map("stores")
 }
@@ -401,6 +418,7 @@ model Product {
   variants        ProductVariant[]
   images          ProductImage[]
   attributeValues ProductAttributeValue[]
+  orderItems      OrderItem[]
 
   @@index([storeId, status, updatedAt])
   @@index([categoryId, status, publishedAt])
@@ -424,7 +442,9 @@ model ProductVariant {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cartItems  CartItem[]
+  orderItems OrderItem[]
 
   @@unique([productId, sku])
   @@unique([productId, optionValues])
@@ -467,6 +487,150 @@ model ProductAttributeValue {
   @@index([attributeId, numberValue])
   @@index([textValues], type: Gin)
   @@map("product_attribute_values")
+}
+
+// ---------------------------------------------------------------------------
+// Cart and orders
+// ---------------------------------------------------------------------------
+
+// One cart per signed-in user, or a guest cart found by a random cookie
+// token. A guest cart is merged into the user's cart when they sign in.
+model Cart {
+  id         String   @id @default(cuid())
+  userId     String?  @unique
+  guestToken String?  @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user  User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items CartItem[]
+
+  @@index([updatedAt])
+  @@map("carts")
+}
+
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  variantId String
+  quantity  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cart    Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, variantId])
+  @@map("cart_items")
+}
+
+enum OrderStatus {
+  awaiting_payment
+  paid
+  cancelled
+  expired
+}
+
+enum SubOrderStatus {
+  awaiting_payment
+  paid
+  cancelled
+  expired
+}
+
+enum DistanceSource {
+  pins // both map pins
+  area // neighbourhood centres (e.g. East Legon to Tema Community 25)
+  town // town centres
+  region // regional capitals (last resort)
+}
+
+// A checkout. Stock is reserved (decremented) when it's created and given
+// back if it expires or is cancelled before payment. Money is in pesewas.
+model Order {
+  id             String      @id @default(cuid())
+  // Human-friendly reference, e.g. "BM-261118-7K3Q9".
+  number         String      @unique
+  userId         String
+  status         OrderStatus @default(awaiting_payment)
+  currency       String      @default("GHS")
+  itemsTotal     Int
+  deliveryTotal  Int
+  grandTotal     Int
+  reservedUntil  DateTime
+  // The same key twice (double-click, retry) returns the existing order.
+  idempotencyKey String
+  // Delivery address, copied so later edits to the address book don't change the order.
+  recipientName  String
+  phone          String
+  region         GhanaRegion
+  city           String
+  area           String
+  streetAddress  String?
+  landmark       String?
+  gpsAddress     String?
+  latitude       Float?
+  longitude      Float?
+  paidAt         DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  subOrders SubOrder[]
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@index([status, reservedUntil])
+  @@map("orders")
+}
+
+// The part of an order fulfilled by one seller, with its own delivery fee.
+model SubOrder {
+  id             String         @id @default(cuid())
+  orderId        String
+  storeId        String
+  status         SubOrderStatus @default(awaiting_payment)
+  itemsTotal     Int
+  deliveryFee    Int
+  deliveryKm     Float
+  distanceSource DistanceSource
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  order Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  store Store       @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  items OrderItem[]
+
+  @@unique([orderId, storeId])
+  @@index([storeId, status, createdAt])
+  @@map("sub_orders")
+}
+
+// A line, with what the shopper saw copied at checkout (title, options,
+// price) plus the commission rate in force, so later edits change nothing.
+model OrderItem {
+  id            String   @id @default(cuid())
+  subOrderId    String
+  productId     String?
+  variantId     String?
+  title         String
+  optionValues  String[]
+  sku           String
+  imageUrl      String?
+  unitPrice     Int
+  quantity      Int
+  lineTotal     Int
+  commissionBps Int
+  createdAt     DateTime @default(now())
+
+  subOrder SubOrder        @relation(fields: [subOrderId], references: [id], onDelete: Cascade)
+  product  Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variant  ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([subOrderId])
+  @@index([variantId])
+  @@map("order_items")
 }
 
 // ---------------------------------------------------------------------------
