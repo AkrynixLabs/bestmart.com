@@ -4,6 +4,7 @@ import { Search } from "lucide-react"
 
 import { site } from "@/lib/site"
 
+import { CartLink } from "./cart-link"
 import { UserMenu } from "./user-menu"
 
 export function SiteHeader() {
@@ -36,6 +37,7 @@ export function SiteHeader() {
           <Link href="/sell/apply" className="hidden rounded-md px-3 py-2 text-brand-orange-dark hover:bg-muted sm:inline-flex">
             Sell on {site.name}
           </Link>
+          <CartLink />
           <UserMenu />
         </nav>
       </div>

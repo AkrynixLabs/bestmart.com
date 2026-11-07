@@ -1,7 +1,11 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { ShoppingCart } from "lucide-react"
+import { useMemo, useState, useTransition } from "react"
+import Link from "next/link"
+import { CheckCircle2, Loader2, ShoppingCart } from "lucide-react"
+
+import { addToCartAction } from "@/app/cart/actions"
+import { CART_CHANGED } from "@/components/layout/cart-link"
 
 import { Button } from "@/components/ui/button"
 import { formatGhs } from "@/lib/money"
@@ -19,6 +23,21 @@ export function VariantPicker({ options, variants, lowStockThreshold }: { option
   /** Whether choosing `value` for option `index` (keeping the others) leads to a sellable variant. */
   const available = (index: number, value: string) =>
     variants.some((v) => v.optionValues[index] === value && v.stock > 0 && v.optionValues.every((x, i) => i === index || x === selected[i]))
+
+  const [quantity, setQuantity] = useState(1)
+  const [pending, startTransition] = useTransition()
+  const [result, setResult] = useState<{ ok: boolean; error?: string } | null>(null)
+  const maxQty = variant ? Math.max(1, Math.min(20, variant.stock)) : 1
+
+  function add() {
+    if (!variant) return
+    setResult(null)
+    startTransition(async () => {
+      const res = await addToCartAction(variant.id, Math.min(quantity, maxQty))
+      setResult(res)
+      if (res.ok) window.dispatchEvent(new Event(CART_CHANGED))
+    })
+  }
 
   const onSale = variant?.compareAtPrice !== null && variant?.compareAtPrice !== undefined && variant.compareAtPrice > variant.price
   return (
@@ -69,11 +88,43 @@ export function VariantPicker({ options, variants, lowStockThreshold }: { option
         </fieldset>
       ))}
 
-      <div className="grid gap-2">
-        <Button size="lg" variant="accent" disabled className="w-full sm:w-auto">
-          <ShoppingCart aria-hidden /> Add to cart
-        </Button>
-        <p className="text-xs text-muted-foreground">Checkout opens soon. Payments go through Paystack and are held until you confirm delivery.</p>
+      <div className="grid gap-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="grid gap-1 text-sm font-medium">
+            Quantity
+            <select
+              value={Math.min(quantity, maxQty)}
+              onChange={(e) => setQuantity(Number(e.target.value))}
+              disabled={!variant || variant.stock === 0}
+              className="h-11 w-20 rounded-md border border-input bg-background px-2"
+            >
+              {Array.from({ length: maxQty }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button size="lg" variant="accent" className="flex-1 sm:flex-none" disabled={!variant || variant.stock === 0 || pending} onClick={add}>
+            {pending ? <Loader2 className="animate-spin" aria-hidden /> : <ShoppingCart aria-hidden />} Add to cart
+          </Button>
+        </div>
+        <div aria-live="polite" className="min-h-5 text-sm">
+          {result?.ok ? (
+            <p className="flex items-center gap-2 text-emerald-700">
+              <CheckCircle2 className="size-4" aria-hidden /> Added to your cart.{" "}
+              <Link href="/cart" className="font-semibold underline">
+                View cart
+              </Link>
+            </p>
+          ) : result?.error ? (
+            <p role="alert" className="text-destructive">
+              {result.error}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Pay with MoMo or card. Your money is held until you confirm delivery.</p>
+          )}
+        </div>
       </div>
     </div>
   )

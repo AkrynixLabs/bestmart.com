@@ -31,6 +31,8 @@ const schema = z.object({
   BLOB_READ_WRITE_TOKEN: optional,
   // A second Blob store with public access, for product and category photos.
   PUBLIC_BLOB_READ_WRITE_TOKEN: optional,
+  // Vercel Cron sends "Authorization: Bearer <CRON_SECRET>". Required in production for /api/cron/*.
+  CRON_SECRET: optional,
 
   // End-to-end test mode for a local/CI production build: local outbox and
   // file storage, no rate limits. Ignored on Vercel production.

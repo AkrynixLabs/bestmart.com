@@ -9,7 +9,7 @@ import { authConfig } from "./auth.config"
 // lib/auth/session.ts, against the database.
 const { auth } = NextAuth(authConfig)
 
-const SIGNED_IN_ONLY = ["/account", "/seller", "/admin", "/sell/apply"]
+const SIGNED_IN_ONLY = ["/account", "/seller", "/admin", "/sell/apply", "/checkout", "/orders"]
 const GUEST_ONLY = ["/login", "/signup"]
 
 export default auth((req) => {
