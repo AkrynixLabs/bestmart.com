@@ -189,7 +189,7 @@ test.describe("catalog journey", () => {
 
 test("catalog pages fit a phone screen", async ({ page, isMobile }) => {
   test.skip(!isMobile, "mobile only")
-  for (const path of ["/c/electronics", "/search?q=phone", "/search"]) {
+  for (const path of ["/c/electronics", "/search?q=phone", "/search", "/cart"]) {
     await page.goto(path)
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
     expect(overflow, path).toBeLessThanOrEqual(0)

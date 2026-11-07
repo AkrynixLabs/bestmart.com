@@ -95,3 +95,35 @@ export async function createApprovedSeller(page: Page, seller: { name: string; e
 export function statusWith(page: Page, text: string) {
   return page.getByRole("status").filter({ hasText: text })
 }
+
+/** As a signed-in seller: lists a single-variant product in a leaf category and publishes it. Returns its public path. */
+export async function createPublishedProduct(page: Page, opts: { title: string; category: string; price: string; stock: string }) {
+  await page.goto("/seller/products/new")
+  await page.getByLabel("Product name").fill(opts.title)
+  await page.getByLabel("Category").selectOption({ label: opts.category })
+  await page.getByRole("button", { name: "Continue" }).click()
+  await expect(page.getByText("Draft created.")).toBeVisible()
+  await page.getByLabel("Add product photos").setInputFiles("tests/e2e/fixtures/product-photo.jpg")
+  await expect(page.getByRole("img", { name: `${opts.title}, photo 1` })).toBeVisible()
+  await page.getByLabel("Description").fill("Hand-made shea butter body cream, 250 ml jar. Unscented and gentle on dry skin.")
+  await page.getByRole("button", { name: "Save details" }).click()
+  await expect(statusWith(page, "Details saved.")).toBeVisible()
+  await page.getByLabel("Price for Default", { exact: true }).fill(opts.price)
+  await page.getByLabel("Stock for Default", { exact: true }).fill(opts.stock)
+  await page.getByRole("button", { name: "Save prices and stock" }).click()
+  await expect(statusWith(page, "Variants saved.")).toBeVisible()
+  await page.getByRole("button", { name: "Publish" }).click()
+  await expect(statusWith(page, "Published.")).toBeVisible()
+  const href = await page.getByRole("link", { name: /View on store/ }).getAttribute("href")
+  return href!
+}
+
+/** Test-only: pushes an order's reservation into the past so the expiry job picks it up. */
+export function expireOrder(number: string) {
+  execFileSync("npx", ["tsx", "tests/e2e/support/expire-order.ts", number], { stdio: "pipe" })
+}
+
+/** Test-only: restores the default delivery bands (used around tests that edit them). */
+export function resetDeliverySettings() {
+  execFileSync("npx", ["tsx", "tests/e2e/support/reset-delivery.ts"], { stdio: "pipe" })
+}
