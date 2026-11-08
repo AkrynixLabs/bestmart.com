@@ -83,6 +83,7 @@ model User {
   addresses            Address[]
   cart                 Cart?
   orders               Order[]
+  refundsIssued        Refund[]
   sellerApplications   SellerApplication[]  @relation("applicant")
   reviewedApplications SellerApplication[]  @relation("reviewer")
   store                Store?
@@ -256,6 +257,7 @@ model Store {
   products            Product[]
   categorySuggestions CategorySuggestion[]
   subOrders           SubOrder[]
+  ledgerEntries       LedgerEntry[]
 
   @@map("stores")
 }
@@ -529,6 +531,7 @@ enum OrderStatus {
   paid
   cancelled
   expired
+  refunded // fully refunded
 }
 
 enum SubOrderStatus {
@@ -536,6 +539,7 @@ enum SubOrderStatus {
   paid
   cancelled
   expired
+  refunded // fully refunded
 }
 
 enum DistanceSource {
@@ -571,6 +575,8 @@ model Order {
   gpsAddress     String?
   latitude       Float?
   longitude      Float?
+  // Sum of processed + pending refunds, in pesewas.
+  refundedTotal  Int         @default(0)
   paidAt         DateTime?
   cancelledAt    DateTime?
   createdAt      DateTime    @default(now())
@@ -578,6 +584,8 @@ model Order {
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Restrict)
   subOrders SubOrder[]
+  payments  Payment[]
+  refunds   Refund[]
 
   @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])
@@ -587,20 +595,26 @@ model Order {
 
 // The part of an order fulfilled by one seller, with its own delivery fee.
 model SubOrder {
-  id             String         @id @default(cuid())
-  orderId        String
-  storeId        String
-  status         SubOrderStatus @default(awaiting_payment)
-  itemsTotal     Int
-  deliveryFee    Int
-  deliveryKm     Float
-  distanceSource DistanceSource
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  orderId         String
+  storeId         String
+  status          SubOrderStatus @default(awaiting_payment)
+  itemsTotal      Int
+  deliveryFee     Int
+  deliveryKm      Float
+  distanceSource  DistanceSource
+  // Set when the order is paid: sum of each line's commission (half-up per line).
+  commissionTotal Int            @default(0)
+  refundedTotal   Int            @default(0)
+  paidAt          DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
-  order Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  store Store       @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  items OrderItem[]
+  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  store         Store         @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  items         OrderItem[]
+  refunds       Refund[]
+  ledgerEntries LedgerEntry[]
 
   @@unique([orderId, storeId])
   @@index([storeId, status, createdAt])
@@ -631,6 +645,136 @@ model OrderItem {
   @@index([subOrderId])
   @@index([variantId])
   @@map("order_items")
+}
+
+// ---------------------------------------------------------------------------
+// Payments, refunds and the seller ledger
+// ---------------------------------------------------------------------------
+
+enum PaymentStatus {
+  initialized // sent to the provider's checkout page
+  succeeded
+  failed
+  abandoned
+}
+
+// One attempt to pay an order (a buyer may try more than once).
+model Payment {
+  id                    String        @id @default(cuid())
+  orderId               String
+  provider              String // "paystack"
+  // Our reference, sent to the provider; unique across all attempts.
+  reference             String        @unique
+  amount                Int // pesewas
+  currency              String        @default("GHS")
+  status                PaymentStatus @default(initialized)
+  providerTransactionId String?
+  channel               String? // "mobile_money", "card", ...
+  // The provider's fee, borne by the platform out of commission.
+  providerFee           Int?
+  failureReason         String?
+  paidAt                DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  refunds Refund[]
+
+  @@index([orderId])
+  @@map("payments")
+}
+
+// Every webhook we receive, recorded before processing. The unique key makes
+// a re-delivered event a no-op.
+model WebhookEvent {
+  id          String    @id @default(cuid())
+  provider    String
+  dedupeKey   String
+  eventType   String
+  payload     Json
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  error       String?
+
+  @@unique([provider, dedupeKey])
+  @@index([receivedAt])
+  @@map("webhook_events")
+}
+
+enum RefundStatus {
+  pending // asked of the provider, not confirmed yet
+  processed
+  failed
+}
+
+// Money returned to a buyer for (part of) one seller's sub-order.
+model Refund {
+  id               String       @id @default(cuid())
+  orderId          String
+  subOrderId       String
+  paymentId        String
+  amount           Int // pesewas: itemsAmount + deliveryAmount
+  itemsAmount      Int
+  deliveryAmount   Int
+  // Commission given back to the seller in proportion to the items refunded.
+  commissionAmount Int
+  reason           String
+  status           RefundStatus @default(pending)
+  providerRefundId String?
+  automatic        Boolean      @default(false) // e.g. paid after the stock was gone
+  createdById      String?
+  processedAt      DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  subOrder  SubOrder @relation(fields: [subOrderId], references: [id], onDelete: Restrict)
+  payment   Payment  @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  createdBy User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([status])
+  @@map("refunds")
+}
+
+enum LedgerKind {
+  sale // + item total of a paid sub-order
+  commission // - platform commission on it
+  delivery // + delivery fee (not commissioned)
+  refund // - items refunded to the buyer
+  commission_reversal // + commission given back on a refund
+  delivery_refund // - delivery fee refunded
+  payout // - money transferred to the seller (after Phase 5)
+  adjustment // +/- manual correction by an admin
+}
+
+enum LedgerBucket {
+  pending // waiting for delivery confirmation + the payout hold
+  available // can be paid out
+}
+
+// What each seller is owed. Amounts are signed pesewas and never edited;
+// a seller's balance is the sum of their entries per bucket. Entries move
+// from pending to available when delivery is confirmed and the hold ends
+// (Phase 5). A negative available balance is recovered from later sales.
+model LedgerEntry {
+  id         String       @id @default(cuid())
+  storeId    String
+  subOrderId String?
+  refundId   String?
+  kind       LedgerKind
+  amount     Int
+  bucket     LedgerBucket @default(pending)
+  note       String?
+  releasedAt DateTime?
+  createdAt  DateTime     @default(now())
+
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  subOrder SubOrder? @relation(fields: [subOrderId], references: [id], onDelete: Restrict)
+
+  @@index([storeId, bucket])
+  @@index([subOrderId])
+  @@map("ledger_entries")
 }
 
 // ---------------------------------------------------------------------------
