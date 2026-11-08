@@ -15,6 +15,10 @@ const GUEST_ONLY = ["/login", "/signup"]
 export default auth((req) => {
   const { pathname, search } = req.nextUrl
   const signedIn = Boolean(req.auth?.user)
+  // Only redirect page loads. A form submission (Server Action POST) that got
+  // a redirect instead of an action response would crash the page; actions
+  // check the session themselves and return a clear error instead.
+  if (req.method !== "GET" && req.method !== "HEAD") return NextResponse.next()
 
   if (!signedIn && SIGNED_IN_ONLY.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     const login = new URL("/login", req.url)
@@ -30,5 +34,5 @@ export default auth((req) => {
 })
 
 export const config = {
-  matcher: ["/account/:path*", "/seller/:path*", "/admin/:path*", "/sell/apply", "/login", "/signup"],
+  matcher: ["/account/:path*", "/seller/:path*", "/admin/:path*", "/sell/apply", "/checkout", "/orders/:path*", "/login", "/signup"],
 }
