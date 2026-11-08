@@ -31,6 +31,9 @@ const schema = z.object({
   BLOB_READ_WRITE_TOKEN: optional,
   // A second Blob store with public access, for product and category photos.
   PUBLIC_BLOB_READ_WRITE_TOKEN: optional,
+  // Paystack (test key sk_test_..., live key sk_live_...). Without it, outside
+  // production, payments use the local stand-in (lib/payments/fake.ts).
+  PAYSTACK_SECRET_KEY: optional,
   // Vercel Cron sends "Authorization: Bearer <CRON_SECRET>". Required in production for /api/cron/*.
   CRON_SECRET: optional,
 

@@ -104,3 +104,26 @@ export function productBlockedMessage(name: string, productTitle: string, reason
   const action = { label: "View the listing", url: `${appUrl()}/seller/products/${productId}` }
   return { subject: `Listing hidden: ${productTitle}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
 }
+
+const ghs = (pesewas: number) => `GH₵${(pesewas / 100).toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+export function paymentReceivedMessage(name: string, orderNumber: string, total: number) {
+  const title = "Payment received"
+  const lines = [`Hi ${name},`, `We've received ${ghs(total)} for order ${orderNumber}. The seller has been told to prepare it.`, `Your money stays with ${site.name} until you confirm the order arrived.`]
+  const action = { label: "View your order", url: `${appUrl()}/orders/${orderNumber}` }
+  return { subject: `Payment received for order ${orderNumber}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
+}
+
+export function newOrderMessage(name: string, storeName: string, orderNumber: string, itemsTotal: number, itemCount: number) {
+  const title = "You have a new paid order"
+  const lines = [`Hi ${name},`, `${storeName} has a new paid order (${orderNumber}): ${itemCount} item(s), ${ghs(itemsTotal)} before commission.`, "Please prepare it for delivery."]
+  const action = { label: "Open your seller dashboard", url: `${appUrl()}/seller` }
+  return { subject: `New order ${orderNumber}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
+}
+
+export function refundIssuedMessage(name: string, orderNumber: string, amount: number, reason: string) {
+  const title = "Refund on its way"
+  const lines = [`Hi ${name},`, `We've refunded ${ghs(amount)} for order ${orderNumber}.`, `Reason: ${reason}`, "It goes back to the Mobile Money wallet or card you paid with; banks and networks can take a few days to show it."]
+  const action = { label: "View your order", url: `${appUrl()}/orders/${orderNumber}` }
+  return { subject: `Refund for order ${orderNumber}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
+}
