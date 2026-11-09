@@ -22,6 +22,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Link href="/admin/products" className="hover:text-primary">
               Products
             </Link>
+            <Link href="/admin/orders" className="hover:text-primary">
+              Orders
+            </Link>
             {admin.role === "super_admin" ? (
               <Link href="/admin/settings" className="hover:text-primary">
                 Settings

@@ -5,4 +5,5 @@ export const orderStatusLabel: Record<OrderStatus, string> = {
   paid: "Paid",
   cancelled: "Cancelled",
   expired: "Expired (not paid in time)",
+  refunded: "Refunded",
 }

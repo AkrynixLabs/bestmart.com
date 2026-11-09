@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { FormMessage, SubmitButton } from "@/components/forms/form-fields"
 import { initialFormState } from "@/lib/actions/state"
 
-import { cancelOrderAction } from "../actions"
+import { cancelOrderAction, startPaymentAction } from "../actions"
 
 /** "Reserved for 28:41", refreshing the page when time runs out. */
 export function ReservationCountdown({ until }: { until: string }) {
@@ -42,6 +42,21 @@ export function CancelOrderForm({ orderId }: { orderId: string }) {
       <div>
         <SubmitButton variant="outline" pendingText="Cancelling…">
           Cancel order
+        </SubmitButton>
+      </div>
+    </form>
+  )
+}
+
+export function PayButton({ orderNumber, label }: { orderNumber: string; label: string }) {
+  const [state, action] = useActionState(startPaymentAction, initialFormState)
+  return (
+    <form action={action} className="grid gap-2">
+      <FormMessage state={state} />
+      <input type="hidden" name="orderNumber" value={orderNumber} />
+      <div>
+        <SubmitButton size="lg" variant="accent" pendingText="Opening the payment page…">
+          {label}
         </SubmitButton>
       </div>
     </form>

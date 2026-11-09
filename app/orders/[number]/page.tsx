@@ -12,18 +12,21 @@ import { prisma } from "@/lib/prisma"
 import { regionLabel } from "@/lib/validation/common"
 
 import { orderStatusLabel } from "../status"
-import { CancelOrderForm, ReservationCountdown } from "./order-controls"
+import { CancelOrderForm, PayButton, ReservationCountdown } from "./order-controls"
 
 export const metadata: Metadata = { title: "Order", robots: { index: false } }
 
-export default async function OrderPage({ params, searchParams }: { params: Promise<{ number: string }>; searchParams: Promise<{ placed?: string; cancelled?: string }> }) {
-  const [{ number }, { placed, cancelled }] = await Promise.all([params, searchParams])
+export default async function OrderPage({ params, searchParams }: { params: Promise<{ number: string }>; searchParams: Promise<{ placed?: string; cancelled?: string; payment?: string }> }) {
+  const [{ number }, { placed, cancelled, payment }] = await Promise.all([params, searchParams])
   const user = await requireUser(`/orders/${number}`)
   await releaseExpiredReservations()
   // Ownership is part of the query: someone else's order number is a 404.
   const order = await prisma.order.findFirst({
     where: { number, userId: user.id },
-    include: { subOrders: { orderBy: { createdAt: "asc" }, include: { store: { select: { name: true, slug: true } }, items: { orderBy: { createdAt: "asc" } } } } },
+    include: {
+      subOrders: { orderBy: { createdAt: "asc" }, include: { store: { select: { name: true, slug: true } }, items: { orderBy: { createdAt: "asc" } } } },
+      refunds: { where: { status: { not: "failed" } }, orderBy: { createdAt: "asc" } },
+    },
   })
   if (!order) notFound()
   const awaiting = order.status === "awaiting_payment"
@@ -44,6 +47,25 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         </p>
       ) : null}
 
+      {payment === "paid" && order.status === "paid" ? (
+        <p role="status" className="mt-4 flex gap-2 rounded-md border border-emerald-600/30 bg-emerald-50 p-3 text-sm text-emerald-800">
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden /> Payment received. The seller has been told to prepare your order, and your money is held until you confirm it arrived.
+        </p>
+      ) : null}
+      {payment === "pending" ? (
+        <p role="status" className="mt-4 rounded-md border bg-muted p-3 text-sm">We&apos;re waiting for the payment service to confirm your payment. This page updates when it does; refresh in a minute.</p>
+      ) : null}
+      {payment === "failed" && awaiting ? (
+        <p role="alert" className="mt-4 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          The payment didn&apos;t go through. No money was taken. You can try again below.
+        </p>
+      ) : null}
+      {payment === "refunded" ? (
+        <p role="status" className="mt-4 rounded-md border bg-muted p-3 text-sm">
+          Your payment arrived after the items were no longer available, so we&apos;ve refunded it in full.
+        </p>
+      ) : null}
+
       {cancelled && order.status === "cancelled" ? (
         <p role="status" className="mt-4 flex gap-2 rounded-md border border-emerald-600/30 bg-emerald-50 p-3 text-sm text-emerald-800">
           <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden /> Order cancelled. The items are back on sale.
@@ -55,8 +77,11 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           <p className="flex items-center gap-2 text-sm">
             <Clock className="size-4 text-brand-orange-dark" aria-hidden /> Reserved for <ReservationCountdown until={order.reservedUntil.toISOString()} />. After that the items go back on sale.
           </p>
-          <p className="text-sm text-muted-foreground">Online payment (Mobile Money and card, through Paystack) opens in the next update. For now you can review or cancel this order.</p>
-          <CancelOrderForm orderId={order.id} />
+          <PayButton orderNumber={order.number} label={`Pay ${formatGhs(order.grandTotal)}`} />
+          <p className="text-xs text-muted-foreground">Mobile Money (MTN, Telecel, AirtelTigo) or card, on Paystack&apos;s secure page.</p>
+          <div className="border-t pt-3">
+            <CancelOrderForm orderId={order.id} />
+          </div>
         </section>
       ) : null}
 
@@ -106,6 +131,12 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                 <dt>Total</dt>
                 <dd className="tabular-nums">{formatGhs(order.grandTotal)}</dd>
               </div>
+              {order.refunds.map((r) => (
+                <div key={r.id} className="flex justify-between text-emerald-700">
+                  <dt>Refund{r.status === "pending" ? " (processing)" : ""}</dt>
+                  <dd className="tabular-nums">−{formatGhs(r.amount)}</dd>
+                </div>
+              ))}
             </dl>
           </div>
           <div className="rounded-xl border p-4 text-sm">

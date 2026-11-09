@@ -5,6 +5,7 @@ import { requireSellerStore } from "@/lib/catalog/seller"
 const links = [
   { href: "/seller", label: "Dashboard" },
   { href: "/seller/products", label: "Products" },
+  { href: "/seller/earnings", label: "Earnings" },
   { href: "/seller/settings", label: "Pickup location" },
   { href: "/seller/categories", label: "Suggest a category" },
 ]
