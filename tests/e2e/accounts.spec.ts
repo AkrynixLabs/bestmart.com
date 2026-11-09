@@ -123,3 +123,24 @@ test("password reset with an emailed link", async ({ page, isMobile }) => {
   await expect(page).toHaveURL(/\/login\?reset=1/)
   await logIn(page, user.email, "brandnew456")
 })
+
+test("submitting the sign-in form after signing in from another tab doesn't crash", async ({ context, isMobile }) => {
+  test.skip(isMobile, "desktop only")
+  const user = { name: "Two Tabs", email: uniqueEmail("tabs"), password: PASSWORD }
+  const setup = await context.newPage()
+  await signUpAndVerify(setup, user)
+  await setup.close()
+
+  // Tab A: the sign-in form, opened while signed out.
+  const tabA = await context.newPage()
+  await tabA.goto("/login")
+  await tabA.getByLabel("Email").fill(user.email)
+  await tabA.getByLabel("Password").fill(user.password)
+  // Tab B: signs in first.
+  const tabB = await context.newPage()
+  await logIn(tabB, user.email, user.password)
+  // Back in tab A, the form still works (it used to hit a redirect and show the error page).
+  await tabA.getByRole("button", { name: "Sign in" }).click()
+  await expect(tabA).toHaveURL(/\/account$/)
+  await expect(tabA.getByRole("heading", { name: "Something went wrong" })).toHaveCount(0)
+})

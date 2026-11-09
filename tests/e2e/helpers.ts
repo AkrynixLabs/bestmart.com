@@ -49,6 +49,10 @@ export async function logIn(page: Page, email: string, password: string) {
 }
 
 export async function logOut(page: Page) {
+  // Leave the page first: an in-flight request from it (e.g. the session
+  // refresh behind the account menu) could otherwise set the session cookie
+  // again right after we clear it, leaving the "signed-out" user signed in.
+  await page.goto("about:blank")
   await page.context().clearCookies()
 }
 

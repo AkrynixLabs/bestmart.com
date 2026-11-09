@@ -8,7 +8,8 @@ import { createApprovedSeller, createPublishedProduct, expireOrder, logIn, logOu
 
 test.describe("checkout journey", () => {
   test.skip(({ isMobile }) => isMobile, "desktop only")
-  test.describe.configure({ mode: "serial" })
+  // Journey steps create accounts, stores and products; allow for a busy parallel run.
+  test.describe.configure({ mode: "serial", timeout: 90_000 })
   // "Use my location" in the address form resolves to central Accra.
   test.use({ geolocation: { latitude: 5.6037, longitude: -0.187 }, permissions: ["geolocation"] })
   // Fees below assume the default bands; restore them even if a run dies midway.

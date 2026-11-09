@@ -9,7 +9,8 @@ import { createApprovedSeller, linkFromEmail, logIn, logOut, PASSWORD, statusWit
 
 test.describe("catalog journey", () => {
   test.skip(({ isMobile }) => isMobile, "desktop only (mobile layout is covered by the smoke tests)")
-  test.describe.configure({ mode: "serial" })
+  // Journey steps create accounts, stores and products; allow for a busy parallel run.
+  test.describe.configure({ mode: "serial", timeout: 90_000 })
 
   const run = Date.now().toString(36)
   const seller = { name: "Kofi Boateng", email: uniqueEmail("kofi") }
