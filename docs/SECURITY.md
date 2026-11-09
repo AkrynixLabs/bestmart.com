@@ -1,6 +1,6 @@
 # Security
 
-## In place (Phase 0-3)
+## In place (Phase 0-4a)
 
 - **Security headers** on every response (`next.config.ts`): HSTS, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`; `X-Powered-By` removed.
 - **Validated configuration** (`lib/env.ts`); secrets are server-only (`server-only` import guard). Only `NEXT_PUBLIC_*` values reach the browser.
@@ -21,6 +21,10 @@
 - **Guest cart cookie:** random 24-byte token, httpOnly, SameSite=Lax, Secure in production; it only identifies a cart (no personal data).
 - **Delivery settings** are Super Admin only and audit-logged with before/after values; the cron route requires `CRON_SECRET` in production (constant-time comparison).
 - **Location data:** map pins are optional, validated to lie inside Ghana, and stored only on the user's own addresses and orders.
+- **Payments:** card and MoMo details are entered only on Paystack's hosted page. Webhooks must carry a valid HMAC-SHA512 signature, are recorded and de-duplicated before processing, and never decide anything alone: every payment is re-verified with Paystack's API, and the amount and currency must match the order exactly. A browser return URL proves nothing; it only triggers the same verification. Status changes use conditional updates, and a partial unique index allows only one successful payment per order (duplicates are refunded).
+- **Refunds** are admin-only (ops and super admins), row-locked against concurrent over-refunds, capped by database constraints, emailed to the buyer and audit-logged.
+- **Payment stand-in** (`/dev/paystack/*`) exists only when no Paystack key is configured outside production (or in e2e); it returns 404 otherwise.
+- **Proxy** redirects only GET/HEAD requests, so Server Action submissions are never answered with an HTML redirect.
 - **Search input** is length-capped and passed as bound parameters (`Prisma.sql`), never concatenated into SQL. JSON-LD escapes `<`.
 - **Test mode guard:** `E2E_TEST_MODE=1` (local outbox, local storage, no rate limits) is ignored when `VERCEL_ENV=production`, and production without Resend/Blob keys refuses to start those features rather than silently falling back.
 
@@ -29,7 +33,7 @@
 | Phase | Control |
 |---|---|
 | 4 | Strict Content-Security-Policy with nonces (Paystack, Sentry and `tile.openstreetmap.org` image origins) |
-| 4 | Paystack webhook signature verification, server-side re-verification, idempotent processing; no card data ever touches our servers (Paystack-hosted checkout) |
+| 4b | Restrict the webhook route to Paystack's published IP addresses as defence in depth |
 | 6 | Admin audit log viewer; two-factor sign-in for admin accounts (proposed) |
 | 9 | Pre-launch review: OWASP checklist, dependency review, backup/restore drill |
 

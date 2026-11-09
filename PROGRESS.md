@@ -30,11 +30,11 @@ The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working
 - [x] Atomic checkout: re-price, reserve stock with row locks, create the order plus one sub-order per seller (`awaiting_payment`)
 - [x] Reservation expiry (released on checkout/cart/order views, plus a daily Vercel Cron backstop)
 
-## Phase 4 — Payments and money
-- [ ] Paystack payment (MoMo + card); webhook with signature check, verification and idempotency
-- [ ] Commission per line (category override aware); seller ledger (pending → available)
-- [ ] Payouts by Paystack Transfer to seller MoMo / bank; payout history
-- [ ] Refunds (full and partial), clawback from the seller ledger
+## Phase 4 — Payments and money (4a built 2026-11-09 against a local Paystack stand-in; real Paystack test pending keys)
+- [x] Paystack payment (MoMo + card); webhook with signature check, verification and idempotency
+- [x] Commission per line (category override aware); seller ledger (pending; → available comes with Phase 5)
+- [x] Refunds (full and partial), clawback from the seller ledger
+- [ ] *(moved to after Phase 5)* Payouts by Paystack Transfer to seller MoMo / bank, weekly batch approved by the Super Admin; payout history
 
 ## Phase 5 — Fulfilment
 - [ ] Sub-order state machine with status history: paid → processing → shipped → delivered → completed (plus cancelled, refunded, disputed)
@@ -72,3 +72,4 @@ The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working
 - **2026-11-02** — Phase 1 done: people can create accounts (email confirmation, password reset, Google once configured), save delivery addresses, and apply to sell; admins review applications, see the Ghana Card privately, and approval creates the store. Next: Phase 2, the catalog.
 - **2026-11-06** — Phase 2 done: admins manage categories and their filters from the website; sellers list products with photos, sizes/colours and stock; shoppers browse, filter and search; admins can take listings down. Also fixed Ghana Card uploads over 1 MB. Next: Phase 3, cart and checkout (needs the delivery fees).
 - **2026-11-07** — Phase 3 done: shoppers fill a cart (signed in or not), add an address with a map pin, see a delivery fee worked out from distance, and place an order that holds the stock for 30 minutes; they can cancel, and unpaid orders expire. The Super Admin edits the delivery bands. Next: Phase 4, Paystack payments, commission and seller payouts.
+- **2026-11-09** — Phase 4a done: buyers pay for orders (Mobile Money or card through Paystack, tested with a local stand-in until real keys arrive); sellers see their earnings held as pending; admins can refund all or part of an order. Fixed a sign-in crash. Next: test against real Paystack once keys arrive; then Phase 5, fulfilment (shipping, delivery confirmation), then payouts.

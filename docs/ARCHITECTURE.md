@@ -52,6 +52,13 @@ Prisma 7 with the `@prisma/adapter-pg` (node-postgres) driver adapter. The same 
 - **Checkout** (`lib/checkout/orders.ts`): one transaction that locks the variant rows (`FOR UPDATE`, in id order to avoid deadlocks), re-checks and re-prices everything, writes the order, one sub-order per seller and snapshot line items, and reserves stock by decrementing it. A per-user idempotency key makes retries return the same order.
 - **Reservation expiry:** an unpaid order is claimed with a conditional status update before its stock is returned, so expiry, cancellation and (Phase 4) payment can't both succeed. Expired orders are released whenever someone checks out or views a cart or order, and by a cron backstop.
 
+## Payments and the seller ledger
+
+- **Provider layer** (`lib/payments/`): `PaymentProvider` (initialize, verify, refund, verifySignature) with a Paystack implementation and a local stand-in for development and tests. `paymentProvider()` picks one from the environment.
+- **Paying:** the order page starts a `Payment` (unique reference per attempt) and sends the buyer to the hosted checkout. Both the return page and the webhook call `confirmPayment(reference)`, which asks the provider for the truth and is idempotent.
+- **Money where it sits:** the platform's Paystack balance holds buyer payments. The `LedgerEntry` table records what each seller is owed (sale +, commission −, delivery +; refunds −, commission returned +), in `pending` until delivery is confirmed and the hold passes (Phase 5), then `available` for payouts (after Phase 5).
+- **Refunds** reserve their amount on the sub-order under a row lock, call the provider, and write ledger entries once the provider confirms.
+
 ## Observability
 
 - `lib/logger.ts`: one-line JSON logs with key-based secret redaction (tokens, passwords, Ghana Card numbers).

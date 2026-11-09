@@ -117,5 +117,31 @@ Also added an npm `overrides` entry so `@vercel/cli-config`'s nested `zod` uses 
 - Concurrency (two buyers racing for the last item) relies on the row locks; not load-tested yet (Phase 9).
 - The map itself (tile loading, dragging) isn't exercised by e2e; the "Use my location" path is.
 - Place coordinates are approximate (about 1 km); they only matter when a pin is missing.
-- Twice, during development, an earlier version of the band-change test hit the generic error page on the login screen with nothing in the server log. It hasn't recurred in five full runs since the test was restructured; not root-caused.
+- Twice, during development, an earlier version of the band-change test hit the generic error page on the login screen with nothing in the server log. *Root-caused in Phase 4a: see that entry (proxy redirecting a Server Action POST).*
 - A test that changed the bands once left them modified after failing. Tests now reset delivery settings from a DB script before and after the suite.
+
+## 2026-11-08 to 2026-11-09: Phase 4a, payments, commission, ledger and refunds
+
+**Decided with the user:** escrow-style money flow with funds kept in BestMart's Paystack balance (the user is confirming with Paystack that this is allowed; fallback is split-at-payment with the same ledger); weekly payout batches approved by the Super Admin; payouts built after Phase 5; development uses a local Paystack stand-in until test keys arrive.
+
+**Built**
+- **Data model** (migration `payments_and_ledger`): `Payment` (one per attempt, unique reference, provider fee), `WebhookEvent` (unique per provider + dedupe key), `Refund` (items/delivery/commission split, provider id, automatic flag), `LedgerEntry` (signed pesewas, kind, pending/available bucket), `refunded` order/sub-order status, `refundedTotal`, `SubOrder.commissionTotal`/`paidAt`. CHECKs: amounts positive, refund parts add up, refunds ≤ paid, commission ≤ items, ledger sign matches kind; partial unique index: at most one succeeded payment per order.
+- **Provider layer** (`lib/payments/`): interface (initialize, verify, refund, verifySignature); Paystack REST client (GHS in pesewas, MoMo + card channels, 20 s timeouts); local stand-in (JSON files in `.data/fake-payments/`, `/dev/paystack/[reference]` approve/decline page that sends a signed `charge.success` webhook to our endpoint, 404 whenever real keys are configured). Pure rules (`rules.ts`): per-line commission, sale entries, refund split, references, webhook keys.
+- **Flow:** "Pay GH₵…" on the order page → hosted checkout → return page asks the provider for the truth → webhook does the same independently. `confirmPayment` is idempotent; claims the payment then the order (`awaiting_payment → paid`); a late payment (order expired/cancelled) re-reserves stock under row locks or is refunded in full automatically; a second successful payment for a paid order is refunded and recorded as such; amount/currency mismatches are never fulfilled. On success: sub-orders paid, commission frozen, seller ledger credited (pending), buyer and seller emailed.
+- **Refunds:** `issueRefund` locks the sub-order row, splits the amount (items first, then delivery; commission returned proportionally and cumulatively so partial refunds don't drift), reserves it, calls the provider, then writes ledger entries (same bucket as the sale; may go negative once available) and statuses; `refund.processed`/`refund.failed` webhooks finish pending ones; failures release the reservation. Buyer emailed; audit-logged.
+- **Pages:** order page Pay button, payment banners and refunds; `/admin/orders` (views, search) and `/admin/orders/[number]` (items with commission rates, seller ledger per part, payments with fees, refunds, refund form for ops and super admins); `/seller/earnings` (pending/available balances, activity).
+
+**Root-caused the login error page.** The proxy redirected signed-in users away from `/login`, including the sign-in form's Server Action POST. In tests, the previous page's `/api/auth/session` refresh rewrote the session cookie after `clearCookies()`; for real users, the same happens when they sign in in another tab and then submit the form. The client got an HTML redirect instead of an action response ("An unexpected response was received from the server"). The proxy now only redirects GET/HEAD; a new e2e test (two tabs) fails on the old proxy and passes on the new one. Also added `/checkout` and `/orders` to the proxy matcher (they were protected by page-level checks only).
+
+**Also fixed a test-helper race:** `logOut()` cleared cookies while the previous page could still be refreshing the session, which sometimes re-set the cookie (a "signed-out" shopper still saw an admin preview, or `/login` redirected away). It now leaves the page before clearing cookies. Journey suites allow 90 s per step.
+
+**Verified**
+- Full Playwright suite 41/41 on three consecutive runs; `npm run check` with Vitest 101/101; `next build` clean.
+- Vitest: 9 new tests (commission rounding, ledger entries, refund splits incl. no-drift over three partial refunds and over-refund rejection, HMAC signatures, dedupe keys).
+- Migration chain on a scratch database: zero drift; applied locally.
+- Payments e2e (desktop, against the stand-in): declined payment changes nothing → approved payment marks the order paid and emails buyer and seller → seller earnings show GH₵111.00 pending (90 − 9 + 30) → a replayed signed webhook returns `duplicate` and changes nothing; a forged one gets 401 → admin refunds GH₵45 (commission GH₵4.50 returned; earnings GH₵70.50; buyer sees −GH₵45; over-refund refused) → paying after the hold expired re-reserves the stock → paying after it expired *and* the stock was sold refunds in full automatically.
+
+**Not verified / notes**
+- Real Paystack (no keys yet): request/response shapes follow Paystack's documented API, but haven't been exercised against their test environment. To do as soon as the user sends `sk_test_…`.
+- Refund webhooks (`refund.processed`/`failed`) are handled but untested end to end: the stand-in completes refunds immediately.
+- Paystack's fee is recorded per payment; platform revenue reports come with the admin phase.
