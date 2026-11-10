@@ -39,6 +39,8 @@ model PlatformSettings {
   deliveryBands           Json     @default("[{\"upToKm\":5,\"feePesewas\":1500},{\"upToKm\":10,\"feePesewas\":2000},{\"upToKm\":20,\"feePesewas\":3000},{\"upToKm\":40,\"feePesewas\":4500},{\"upToKm\":100,\"feePesewas\":7000},{\"upToKm\":300,\"feePesewas\":10000},{\"upToKm\":null,\"feePesewas\":14000}]")
   // Straight-line distance x this factor (percent) approximates the road route.
   deliveryRoadFactorPct   Int      @default(130)
+  // A paid sub-order not shipped within this many days can be cancelled by the buyer for a full refund.
+  shipWithinDays          Int      @default(3)
   supportEmail            String?
   supportPhone            String?
   updatedAt               DateTime @updatedAt
@@ -84,6 +86,8 @@ model User {
   cart                 Cart?
   orders               Order[]
   refundsIssued        Refund[]
+  disputesOpened       Dispute[]            @relation("disputeOpener")
+  disputesResolved     Dispute[]            @relation("disputeResolver")
   sellerApplications   SellerApplication[]  @relation("applicant")
   reviewedApplications SellerApplication[]  @relation("reviewer")
   store                Store?
@@ -537,6 +541,10 @@ enum OrderStatus {
 enum SubOrderStatus {
   awaiting_payment
   paid
+  processing // seller accepted it
+  shipped
+  delivered // buyer confirmed, auto-confirmed, or set by an admin
+  completed // funds released to the seller's available balance
   cancelled
   expired
   refunded // fully refunded
@@ -595,26 +603,40 @@ model Order {
 
 // The part of an order fulfilled by one seller, with its own delivery fee.
 model SubOrder {
-  id              String         @id @default(cuid())
-  orderId         String
-  storeId         String
-  status          SubOrderStatus @default(awaiting_payment)
-  itemsTotal      Int
-  deliveryFee     Int
-  deliveryKm      Float
-  distanceSource  DistanceSource
+  id                String          @id @default(cuid())
+  orderId           String
+  storeId           String
+  status            SubOrderStatus  @default(awaiting_payment)
+  itemsTotal        Int
+  deliveryFee       Int
+  deliveryKm        Float
+  distanceSource    DistanceSource
   // Set when the order is paid: sum of each line's commission (half-up per line).
-  commissionTotal Int            @default(0)
-  refundedTotal   Int            @default(0)
-  paidAt          DateTime?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  commissionTotal   Int             @default(0)
+  refundedTotal     Int             @default(0)
+  paidAt            DateTime?
+  // Fulfilment
+  shipBy            DateTime?
+  acceptedAt        DateTime?
+  shippedAt         DateTime?
+  deliveryMethod    DeliveryMethod?
+  carrierName       String?
+  riderPhone        String?
+  trackingNumber    String?
+  deliveredAt       DateTime?
+  confirmedBy       ActorKind?
+  completedAt       DateTime?
+  overdueNotifiedAt DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
-  order         Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  store         Store         @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  order         Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  store         Store           @relation(fields: [storeId], references: [id], onDelete: Restrict)
   items         OrderItem[]
   refunds       Refund[]
   ledgerEntries LedgerEntry[]
+  events        SubOrderEvent[]
+  disputes      Dispute[]
 
   @@unique([orderId, storeId])
   @@index([storeId, status, createdAt])
@@ -775,6 +797,126 @@ model LedgerEntry {
   @@index([storeId, bucket])
   @@index([subOrderId])
   @@map("ledger_entries")
+}
+
+// ---------------------------------------------------------------------------
+// Fulfilment: status history, disputes, email outbox
+// ---------------------------------------------------------------------------
+
+enum DeliveryMethod {
+  own_rider
+  courier
+}
+
+enum ActorKind {
+  buyer
+  seller
+  admin
+  system
+}
+
+// Every status change of a sub-order, for the timeline shown to buyers,
+// sellers and admins. Append-only.
+model SubOrderEvent {
+  id         String          @id @default(cuid())
+  subOrderId String
+  fromStatus SubOrderStatus?
+  toStatus   SubOrderStatus
+  actorKind  ActorKind
+  actorId    String?
+  note       String?
+  createdAt  DateTime        @default(now())
+
+  subOrder SubOrder @relation(fields: [subOrderId], references: [id], onDelete: Cascade)
+
+  @@index([subOrderId, createdAt])
+  @@map("sub_order_events")
+}
+
+enum DisputeReason {
+  not_received
+  faulty
+  not_as_described
+  other
+}
+
+enum DisputeStatus {
+  open
+  resolved
+}
+
+enum DisputeOutcome {
+  full_refund
+  partial_refund
+  rejected
+}
+
+// A buyer's reported problem with one seller's part of an order. While it's
+// open, auto-confirmation and fund release for that part are frozen.
+model Dispute {
+  id             String          @id @default(cuid())
+  orderId        String
+  subOrderId     String
+  openedById     String
+  reason         DisputeReason
+  description    String
+  sellerResponse String?
+  status         DisputeStatus   @default(open)
+  outcome        DisputeOutcome?
+  resolutionNote String?
+  refundId       String?
+  resolvedById   String?
+  resolvedAt     DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  subOrder    SubOrder            @relation(fields: [subOrderId], references: [id], onDelete: Restrict)
+  openedBy    User                @relation("disputeOpener", fields: [openedById], references: [id], onDelete: Restrict)
+  resolvedBy  User?               @relation("disputeResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  attachments DisputeAttachment[]
+
+  @@index([status, createdAt])
+  @@index([subOrderId])
+  @@map("disputes")
+}
+
+// Evidence photos, in the private store; only admins can view them.
+model DisputeAttachment {
+  id          String   @id @default(cuid())
+  disputeId   String
+  key         String
+  contentType String
+  createdAt   DateTime @default(now())
+
+  dispute Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+
+  @@index([disputeId])
+  @@map("dispute_attachments")
+}
+
+enum EmailStatus {
+  pending
+  sent
+  failed // gave up after the maximum attempts
+}
+
+// Transactional outbox: an email is written in the same transaction as the
+// change it announces, then sent (and retried) by flushOutbox().
+model EmailOutbox {
+  id        String      @id @default(cuid())
+  to        String
+  subject   String
+  html      String
+  text      String
+  status    EmailStatus @default(pending)
+  attempts  Int         @default(0)
+  lastError String?
+  sendAfter DateTime    @default(now())
+  sentAt    DateTime?
+  createdAt DateTime    @default(now())
+
+  @@index([status, sendAfter])
+  @@map("email_outbox")
 }
 
 // ---------------------------------------------------------------------------
