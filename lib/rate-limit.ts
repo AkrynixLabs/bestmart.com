@@ -14,6 +14,8 @@ const RULES = {
   "resend-verification": { limit: 5, window: "1 h" },
   "seller-application": { limit: 5, window: "1 d" },
   "change-password": { limit: 10, window: "1 h" },
+  "category-suggestion": { limit: 10, window: "1 d" },
+  "product-image": { limit: 200, window: "1 h" },
 } as const satisfies Record<string, { limit: number; window: Window }>
 
 export type RateLimitName = keyof typeof RULES

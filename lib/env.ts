@@ -29,6 +29,8 @@ const schema = z.object({
   UPSTASH_REDIS_REST_TOKEN: optional,
 
   BLOB_READ_WRITE_TOKEN: optional,
+  // A second Blob store with public access, for product and category photos.
+  PUBLIC_BLOB_READ_WRITE_TOKEN: optional,
 
   // End-to-end test mode for a local/CI production build: local outbox and
   // file storage, no rate limits. Ignored on Vercel production.

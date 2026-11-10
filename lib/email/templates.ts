@@ -83,3 +83,24 @@ export function applicationRejectedMessage(name: string, storeName: string, reas
   const action = { label: "Apply again", url: `${appUrl()}/sell/apply` }
   return { subject: `Your seller application for ${storeName}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
 }
+
+export function categorySuggestionAcceptedMessage(name: string, suggested: string, categoryLabel: string) {
+  const title = "Your category suggestion was added"
+  const lines = [`Hi ${name},`, `Thanks for suggesting "${suggested}". It's now available as ${categoryLabel}, so you can list products there.`]
+  const action = { label: "Add a product", url: `${appUrl()}/seller/products/new` }
+  return { subject: `New category: ${categoryLabel}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
+}
+
+export function categorySuggestionDeclinedMessage(name: string, suggested: string, response: string | null) {
+  const title = "About your category suggestion"
+  const lines = [`Hi ${name},`, `We haven't added "${suggested}" as a category this time.`, ...(response ? [`Note from our team: ${response}`] : [])]
+  const action = { label: "Browse categories", url: `${appUrl()}/seller/products/new` }
+  return { subject: `Your category suggestion: ${suggested}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
+}
+
+export function productBlockedMessage(name: string, productTitle: string, reason: string, productId: string) {
+  const title = "A listing was taken down"
+  const lines = [`Hi ${name},`, `Your listing "${productTitle}" has been hidden from shoppers.`, `Reason: ${reason}`, "Reply to this email if you think this is a mistake or once you've fixed it."]
+  const action = { label: "View the listing", url: `${appUrl()}/seller/products/${productId}` }
+  return { subject: `Listing hidden: ${productTitle}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
+}
