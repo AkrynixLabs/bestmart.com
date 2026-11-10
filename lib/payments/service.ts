@@ -5,6 +5,7 @@ import { sendEmail } from "@/lib/email/send"
 import { newOrderMessage, paymentReceivedMessage, refundIssuedMessage } from "@/lib/email/templates"
 import { Prisma } from "@/lib/generated/prisma/client"
 import { logger } from "@/lib/logger"
+import { getPlatformSettings } from "@/lib/platform-settings"
 import { prisma } from "@/lib/prisma"
 
 import { paymentProvider } from "./index"
@@ -63,10 +64,14 @@ export type ConfirmOutcome = "paid" | "pending" | "failed" | "refunded" | "unkno
 
 /** Marks a sub-order paid and writes the seller's pending ledger entries. */
 async function markSubOrdersPaid(tx: Prisma.TransactionClient, orderId: string, paidAt: Date) {
+  const { shipWithinDays } = await getPlatformSettings()
   const subs = await tx.subOrder.findMany({ where: { orderId }, include: { items: { select: { lineTotal: true, commissionBps: true } } } })
   for (const sub of subs) {
     const commissionTotal = subOrderCommission(sub.items)
-    await tx.subOrder.update({ where: { id: sub.id }, data: { status: "paid", paidAt, commissionTotal } })
+    // The shipping deadline counts from payment (the seller can't ship before it).
+    const shipBy = new Date(Math.max(paidAt.getTime(), Date.now()) + shipWithinDays * 24 * 60 * 60 * 1000)
+    await tx.subOrder.update({ where: { id: sub.id }, data: { status: "paid", paidAt, commissionTotal, shipBy } })
+    await tx.subOrderEvent.create({ data: { subOrderId: sub.id, fromStatus: sub.status, toStatus: "paid", actorKind: "system", note: "Payment received" } })
     await tx.ledgerEntry.createMany({
       data: saleEntries({ itemsTotal: sub.itemsTotal, deliveryFee: sub.deliveryFee, commissionTotal }).map((e) => ({ storeId: sub.storeId, subOrderId: sub.id, kind: e.kind, amount: e.amount })),
     })
@@ -190,7 +195,10 @@ async function finalizeRefund(refundId: string) {
       data: refundEntries(refund).map((e) => ({ storeId: refund.subOrder.storeId, subOrderId: refund.subOrderId, refundId: refund.id, kind: e.kind, amount: e.amount, bucket: stillPending > 0 ? "pending" : "available" })),
     })
     const sub = await tx.subOrder.findUniqueOrThrow({ where: { id: refund.subOrderId } })
-    if (sub.refundedTotal >= sub.itemsTotal + sub.deliveryFee) await tx.subOrder.update({ where: { id: sub.id }, data: { status: "refunded" } })
+    if (sub.refundedTotal >= sub.itemsTotal + sub.deliveryFee && sub.status !== "refunded") {
+      await tx.subOrder.update({ where: { id: sub.id }, data: { status: "refunded" } })
+      await tx.subOrderEvent.create({ data: { subOrderId: sub.id, fromStatus: sub.status, toStatus: "refunded", actorKind: "system", note: "Refunded in full" } })
+    }
     const open = await tx.subOrder.count({ where: { orderId: refund.orderId, status: { not: "refunded" } } })
     if (open === 0) await tx.order.update({ where: { id: refund.orderId }, data: { status: "refunded" } })
   })

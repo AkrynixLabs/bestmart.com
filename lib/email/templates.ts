@@ -127,3 +127,49 @@ export function refundIssuedMessage(name: string, orderNumber: string, amount: n
   const action = { label: "View your order", url: `${appUrl()}/orders/${orderNumber}` }
   return { subject: `Refund for order ${orderNumber}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
 }
+
+export function shippedMessage(name: string, orderNumber: string, storeName: string, how: string) {
+  const title = "Your order is on its way"
+  const lines = [`Hi ${name},`, `${storeName} has sent your items from order ${orderNumber}.`, how, "When it arrives, confirm it on your order page. If something's wrong, report it there instead."]
+  const action = { label: "View your order", url: `${appUrl()}/orders/${orderNumber}` }
+  return { subject: `On its way: order ${orderNumber}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
+}
+
+export function deliveredMessage(name: string, storeName: string, orderNumber: string, auto: boolean, availableOn: string) {
+  const title = "Delivery confirmed"
+  const lines = [
+    `Hi ${name},`,
+    auto ? `Order ${orderNumber} for ${storeName} was confirmed automatically (the buyer didn't report a problem in time).` : `The buyer confirmed they received order ${orderNumber} from ${storeName}.`,
+    `Your earnings for it become available on ${availableOn}, if no problem is reported before then.`,
+  ]
+  const action = { label: "View earnings", url: `${appUrl()}/seller/earnings` }
+  return { subject: `Delivered: order ${orderNumber}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
+}
+
+export function overdueShipmentMessage(name: string, orderNumber: string, storeName: string) {
+  const title = "Your order hasn't shipped yet"
+  const lines = [`Hi ${name},`, `${storeName} hasn't sent your items from order ${orderNumber} within the time allowed.`, "You can keep waiting, or cancel that part of the order for a full refund from your order page."]
+  const action = { label: "View your order", url: `${appUrl()}/orders/${orderNumber}` }
+  return { subject: `Not shipped yet: order ${orderNumber}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
+}
+
+export function disputeOpenedMessage(name: string, storeName: string, orderNumber: string, reason: string, subOrderId: string) {
+  const title = "A buyer reported a problem"
+  const lines = [`Hi ${name},`, `The buyer of order ${orderNumber} (${storeName}) reported: ${reason}.`, "Your earnings for this order are on hold until our team resolves it. You can add your side of the story on the order page."]
+  const action = { label: "Respond", url: `${appUrl()}/seller/orders/${subOrderId}` }
+  return { subject: `Problem reported: order ${orderNumber}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
+}
+
+export function disputeResolvedMessage(name: string, orderNumber: string, outcome: string, note: string | null, url: string) {
+  const title = "Your reported problem has been resolved"
+  const lines = [`Hi ${name},`, `About order ${orderNumber}: ${outcome}`, ...(note ? [`Note from our team: ${note}`] : [])]
+  const action = { label: "View the order", url }
+  return { subject: `Resolved: order ${orderNumber}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
+}
+
+export function sellerCancelledMessage(name: string, orderNumber: string, storeName: string, reason: string) {
+  const title = "Part of your order was cancelled"
+  const lines = [`Hi ${name},`, `${storeName} couldn't fulfil its part of order ${orderNumber}.`, `Reason: ${reason}`, "You'll get a full refund for that part (a separate email confirms it)."]
+  const action = { label: "View your order", url: `${appUrl()}/orders/${orderNumber}` }
+  return { subject: `Cancelled by the seller: order ${orderNumber}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
+}
