@@ -10,15 +10,10 @@ import { regionLabel } from "@/lib/validation/common"
 
 export const metadata: Metadata = { title: "Seller dashboard", robots: { index: false } }
 
-const upcoming = [
-  { icon: ShoppingBag, title: "Orders", body: "See paid orders, mark them shipped, and follow them to delivery." },
-  { icon: Wallet, title: "Earnings and payouts", body: "Track pending and available balances, paid to your MoMo or bank." },
-]
-
 export default async function SellerDashboardPage() {
   const { store } = await requireSellerStore("/seller")
   const settings = await getPlatformSettings()
-  const [byStatus, blocked, lowStock] = await Promise.all([
+  const [byStatus, blocked, lowStock, toShip, late] = await Promise.all([
     prisma.product.groupBy({ by: ["status"], where: { storeId: store.id }, _count: { _all: true } }),
     prisma.product.count({ where: { storeId: store.id, blockedAt: { not: null } } }),
     prisma.productVariant.findMany({
@@ -27,6 +22,8 @@ export default async function SellerDashboardPage() {
       take: 10,
       select: { id: true, sku: true, stock: true, optionValues: true, product: { select: { id: true, title: true } } },
     }),
+    prisma.subOrder.count({ where: { storeId: store.id, status: { in: ["paid", "processing"] } } }),
+    prisma.subOrder.count({ where: { storeId: store.id, status: { in: ["paid", "processing"] }, shipBy: { lt: new Date() } } }),
   ])
   const count = (status: string) => byStatus.find((s) => s.status === status)?._count._all ?? 0
 
@@ -82,22 +79,22 @@ export default async function SellerDashboardPage() {
         )}
       </section>
 
-      <section>
-        <h2 className="font-semibold">Coming next</h2>
-        <ul className="mt-3 grid gap-4 sm:grid-cols-3">
-          <li className="rounded-lg bg-muted p-4">
-            <Package className="size-5 text-brand-blue" aria-hidden />
-            <p className="mt-2 font-medium">Products and stock</p>
-            <p className="mt-1 text-sm text-muted-foreground">Ready now. Shoppers can browse and search your live products.</p>
-          </li>
-          {upcoming.map(({ icon: Icon, title, body }) => (
-            <li key={title} className="rounded-lg bg-muted p-4">
-              <Icon className="size-5 text-brand-blue" aria-hidden />
-              <p className="mt-2 font-medium">{title}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{body}</p>
-            </li>
-          ))}
-        </ul>
+      <section className="grid gap-3 sm:grid-cols-3">
+        <Link href="/seller/orders" className="rounded-xl border p-4 hover:bg-muted/50">
+          <ShoppingBag className="size-5 text-brand-blue" aria-hidden />
+          <p className="mt-2 font-medium">Orders to ship: {toShip}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{late ? `${late} late: ship them or the buyer may cancel.` : "Ship within the deadline on each order."}</p>
+        </Link>
+        <Link href="/seller/earnings" className="rounded-xl border p-4 hover:bg-muted/50">
+          <Wallet className="size-5 text-brand-blue" aria-hidden />
+          <p className="mt-2 font-medium">Earnings</p>
+          <p className="mt-1 text-sm text-muted-foreground">Held until delivery is confirmed, then paid out weekly.</p>
+        </Link>
+        <Link href="/seller/products" className="rounded-xl border p-4 hover:bg-muted/50">
+          <Package className="size-5 text-brand-blue" aria-hidden />
+          <p className="mt-2 font-medium">Products and stock</p>
+          <p className="mt-1 text-sm text-muted-foreground">Keep stock up to date so buyers don&apos;t order what you don&apos;t have.</p>
+        </Link>
       </section>
     </div>
   )

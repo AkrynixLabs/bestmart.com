@@ -6,12 +6,16 @@ import { prisma } from "@/lib/prisma"
 export const metadata: Metadata = { title: "Admin", robots: { index: false } }
 
 export default async function AdminOverviewPage() {
-  const [pending, sellers, customers] = await Promise.all([
+  const [pending, sellers, customers, disputes, late] = await Promise.all([
     prisma.sellerApplication.count({ where: { status: "pending" } }),
     prisma.store.count(),
     prisma.user.count({ where: { role: "customer" } }),
+    prisma.dispute.count({ where: { status: "open" } }),
+    prisma.subOrder.count({ where: { status: { in: ["paid", "processing"] }, shipBy: { lt: new Date() } } }),
   ])
   const stats = [
+    { label: "Problems to resolve", value: disputes, href: "/admin/disputes" },
+    { label: "Late shipments", value: late, href: "/admin/orders" },
     { label: "Applications waiting", value: pending, href: "/admin/seller-applications" },
     { label: "Approved sellers", value: sellers },
     { label: "Customers", value: customers },

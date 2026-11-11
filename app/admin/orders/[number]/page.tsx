@@ -2,13 +2,16 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 
+import { Timeline } from "@/components/orders/timeline"
 import { Badge } from "@/components/ui/badge"
+import { reasonLabel, statusLabel } from "@/lib/fulfilment/rules"
 import { describeQuote } from "@/lib/delivery/fee"
 import { formatBps, formatGhs } from "@/lib/money"
 import { prisma } from "@/lib/prisma"
 import { regionLabel } from "@/lib/validation/common"
 
 import { orderStatusLabel } from "../../../orders/status"
+import { ResolveDisputeForm } from "../../disputes/resolve-form"
 import { RefundForm } from "./refund-form"
 
 export const metadata: Metadata = { title: "Order" }
@@ -24,8 +27,14 @@ const kindLabel: Record<string, string> = {
   adjustment: "Adjustment",
 }
 
-export default async function AdminOrderPage({ params }: { params: Promise<{ number: string }> }) {
-  const { number } = await params
+const DONE: Record<string, string> = {
+  refunded: "Refund sent. The buyer has been emailed.",
+  refund_pending: "Refund requested; it will show as processed once the payment service confirms.",
+  resolved: "Resolved. The buyer and seller have been emailed.",
+}
+
+export default async function AdminOrderPage({ params, searchParams }: { params: Promise<{ number: string }>; searchParams: Promise<{ done?: string }> }) {
+  const [{ number }, { done }] = await Promise.all([params, searchParams])
   const order = await prisma.order.findUnique({
     where: { number },
     include: {
@@ -34,7 +43,13 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ num
       refunds: { orderBy: { createdAt: "asc" }, include: { createdBy: { select: { name: true } } } },
       subOrders: {
         orderBy: { createdAt: "asc" },
-        include: { store: { select: { name: true, slug: true } }, items: { orderBy: { createdAt: "asc" } }, ledgerEntries: { orderBy: { createdAt: "asc" } } },
+        include: {
+          store: { select: { name: true, slug: true } },
+          items: { orderBy: { createdAt: "asc" } },
+          ledgerEntries: { orderBy: { createdAt: "asc" } },
+          events: { orderBy: { createdAt: "asc" } },
+          disputes: { orderBy: { createdAt: "desc" }, include: { attachments: true, resolvedBy: { select: { name: true } } } },
+        },
       },
     },
   })
@@ -56,6 +71,12 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ num
           {order.paidAt ? ` · paid ${order.paidAt.toLocaleString("en-GH", { dateStyle: "medium", timeStyle: "short" })}` : ""}
         </p>
       </div>
+
+      {done && DONE[done] ? (
+        <p role="status" className="rounded-md border border-emerald-600/30 bg-emerald-50 p-3 text-sm text-emerald-800">
+          {DONE[done]}
+        </p>
+      ) : null}
 
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
@@ -82,8 +103,48 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ num
                   {sub.store.name}
                 </Link>
               </h2>
-              <Badge variant="outline">{sub.status.replace("_", " ")}</Badge>
+              <Badge variant="outline">{statusLabel[sub.status]}</Badge>
             </div>
+            {sub.shippedAt ? (
+              <p className="text-sm">
+                <span className="text-muted-foreground">Shipped {sub.shippedAt.toLocaleDateString("en-GH")}: </span>
+                {sub.deliveryMethod === "courier" ? "courier" : "own rider"} {sub.carrierName}
+                {sub.riderPhone ? ` · ${sub.riderPhone}` : ""}
+                {sub.trackingNumber ? ` · tracking ${sub.trackingNumber}` : ""}
+                {sub.deliveredAt ? ` · delivered ${sub.deliveredAt.toLocaleDateString("en-GH")} (${sub.confirmedBy === "system" ? "auto" : sub.confirmedBy})` : ""}
+              </p>
+            ) : sub.shipBy && (sub.status === "paid" || sub.status === "processing") ? (
+              <p className="text-sm text-muted-foreground">Ship by {sub.shipBy.toLocaleString("en-GH", { dateStyle: "medium", timeStyle: "short" })}</p>
+            ) : null}
+            {sub.disputes.map((d) => (
+              <div key={d.id} id={`dispute-${d.id}`} className={d.status === "open" ? "grid gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm" : "grid gap-2 rounded-lg bg-muted/50 p-3 text-sm"}>
+                <p className="font-semibold">
+                  {d.status === "open" ? "Open problem" : `Resolved: ${d.outcome?.replace("_", " ")}`} · {reasonLabel[d.reason]}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Buyer: </span>&ldquo;{d.description}&rdquo;
+                </p>
+                {d.sellerResponse ? (
+                  <p>
+                    <span className="text-muted-foreground">Seller: </span>&ldquo;{d.sellerResponse}&rdquo;
+                  </p>
+                ) : null}
+                {d.attachments.length > 0 ? (
+                  <ul className="flex flex-wrap gap-2">
+                    {d.attachments.map((a, i) => (
+                      <li key={a.id}>
+                        <a href={`/api/admin/dispute-photos/${a.id}`} target="_blank" rel="noreferrer">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={`/api/admin/dispute-photos/${a.id}`} alt={`Evidence photo ${i + 1}`} className="size-24 rounded-md border object-cover" />
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {d.status === "resolved" && d.resolutionNote ? <p className="text-muted-foreground">Note: {d.resolutionNote} ({d.resolvedBy?.name})</p> : null}
+                {d.status === "open" ? <ResolveDisputeForm disputeId={d.id} maxLabel={formatGhs(sub.itemsTotal + sub.deliveryFee - sub.refundedTotal)} /> : null}
+              </div>
+            ))}
             <ul className="divide-y text-sm">
               {sub.items.map((item) => (
                 <li key={item.id} className="flex justify-between gap-3 py-1.5">
@@ -124,6 +185,14 @@ export default async function AdminOrderPage({ params }: { params: Promise<{ num
             ) : null}
 
             {refundable && left > 0 ? <RefundForm subOrderId={sub.id} maxLabel={formatGhs(left)} /> : null}
+            {sub.events.length > 0 ? (
+              <details className="text-sm">
+                <summary className="cursor-pointer text-muted-foreground">History</summary>
+                <div className="mt-3">
+                  <Timeline events={sub.events} />
+                </div>
+              </details>
+            ) : null}
           </section>
         )
       })}

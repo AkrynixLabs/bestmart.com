@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import { FormMessage, SubmitButton } from "@/components/forms/form-fields"
 import { initialFormState } from "@/lib/actions/state"
 
-import { cancelOrderAction, startPaymentAction } from "../actions"
+import { buyerCancelAction, cancelOrderAction, confirmDeliveryAction, startPaymentAction } from "../actions"
 
 /** "Reserved for 28:41", refreshing the page when time runs out. */
 export function ReservationCountdown({ until }: { until: string }) {
@@ -57,6 +57,36 @@ export function PayButton({ orderNumber, label }: { orderNumber: string; label: 
       <div>
         <SubmitButton size="lg" variant="accent" pendingText="Opening the payment page…">
           {label}
+        </SubmitButton>
+      </div>
+    </form>
+  )
+}
+
+export function ConfirmDeliveryForm({ subOrderId }: { subOrderId: string }) {
+  const [state, action] = useActionState(confirmDeliveryAction, initialFormState)
+  return (
+    <form action={action} className="grid gap-2">
+      <FormMessage state={state} />
+      <input type="hidden" name="subOrderId" value={subOrderId} />
+      <div>
+        <SubmitButton size="sm" pendingText="Confirming…">
+          I received it
+        </SubmitButton>
+      </div>
+    </form>
+  )
+}
+
+export function BuyerCancelForm({ subOrderId }: { subOrderId: string }) {
+  const [state, action] = useActionState(buyerCancelAction, initialFormState)
+  return (
+    <form action={action} className="grid gap-2">
+      <FormMessage state={state} />
+      <input type="hidden" name="subOrderId" value={subOrderId} />
+      <div>
+        <SubmitButton size="sm" variant="outline" pendingText="Cancelling…">
+          Cancel this part and get a refund
         </SubmitButton>
       </div>
     </form>

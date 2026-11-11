@@ -1,6 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { redirect } from "next/navigation"
 
 import { echoValues, type FormState } from "@/lib/actions/state"
 import { audit } from "@/lib/audit"
@@ -26,5 +27,6 @@ export async function refundAction(_prev: FormState, formData: FormData): Promis
   const sub = await prisma.subOrder.findUnique({ where: { id: subOrderId }, select: { order: { select: { number: true } } } })
   await audit({ actorId: admin.id, action: "refund.issued", entityType: "sub_order", entityId: subOrderId, metadata: { amount, reason: reason.data, status: result.status }, ip: await clientIp() })
   revalidatePath(`/admin/orders/${sub?.order.number ?? ""}`)
-  return { success: result.status === "processed" ? "Refund sent. The buyer has been emailed." : "Refund requested; it will show as processed once the payment service confirms." }
+  // A full refund removes the refund form, so confirm at page level.
+  redirect(`/admin/orders/${sub?.order.number ?? ""}?done=${result.status === "processed" ? "refunded" : "refund_pending"}`)
 }

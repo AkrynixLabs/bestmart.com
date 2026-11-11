@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 
 import { requireSellerStore } from "@/lib/catalog/seller"
+import { catchUpFulfilment } from "@/lib/fulfilment/service"
 import { formatGhs } from "@/lib/money"
 import { getPlatformSettings } from "@/lib/platform-settings"
 import { prisma } from "@/lib/prisma"
@@ -20,6 +21,7 @@ const kindLabel: Record<string, string> = {
 
 export default async function SellerEarningsPage() {
   const { store } = await requireSellerStore("/seller/earnings")
+  await catchUpFulfilment()
   const [buckets, entries, settings] = await Promise.all([
     prisma.ledgerEntry.groupBy({ by: ["bucket"], where: { storeId: store.id }, _sum: { amount: true } }),
     prisma.ledgerEntry.findMany({
