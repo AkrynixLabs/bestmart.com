@@ -145,3 +145,24 @@ Also added an npm `overrides` entry so `@vercel/cli-config`'s nested `zod` uses 
 - Real Paystack (no keys yet): request/response shapes follow Paystack's documented API, but haven't been exercised against their test environment. To do as soon as the user sends `sk_test_…`.
 - Refund webhooks (`refund.processed`/`failed`) are handled but untested end to end: the stand-in completes refunds immediately.
 - Paystack's fee is recorded per payment; platform revenue reports come with the admin phase.
+
+## 2026-11-10 to 2026-11-11: Phase 5, fulfilment
+
+**Decided with the user:** sellers ship within 3 days of payment (setting), after which the buyer can cancel that part for a full refund; marking shipped needs the method, the rider/courier name and the rider's phone or a tracking number; problem reports can include up to 3 private photos.
+
+**Built**
+- **Data model** (migration `fulfilment`): sub-order statuses `processing`, `shipped`, `delivered`, `completed`; fulfilment fields on `SubOrder` (`shipBy`, `acceptedAt`, `shippedAt`, method, carrier, rider phone, tracking, `deliveredAt`, `confirmedBy`, `completedAt`, `overdueNotifiedAt`); `SubOrderEvent`, `Dispute` (+ `DisputeAttachment`), `EmailOutbox`; `PlatformSettings.shipWithinDays`. CHECKs: shipping details complete when shipped; resolved disputes have an outcome; one open dispute per sub-order (partial unique index).
+- **Rules and service:** pure state machine, deadlines and reportable reasons; `transition()` for every change; accept, ship, confirm, auto-confirm, release (ledger pending → available), cancel with restock + full refund (seller any time before shipping, buyer after the deadline), disputes (open with photos, seller response, admin resolution via `issueRefund`, two-admin race guarded by claiming the dispute first), overdue notices. Payment confirmation now sets `shipBy` and records the first event; refunds that finish a part record it too.
+- **Outbox:** emails enqueued in the same transaction, flushed right after and by the daily job; claimed before sending; backoff 1, 5, 25, 125… minutes, gives up after 6 attempts.
+- **Pages:** `/seller/orders` (tabs, late and problem badges) and `/seller/orders/[id]` (buyer contact and map pin, accept, ship form, cancel, dispute response, earnings breakdown, history); buyer order page per-part status, rider/courier details, "I received it", "Cancel this part", "Report a problem", history; `/orders/[number]/problem`; `/admin/disputes` and dispute panels with photos and a resolve form on `/admin/orders/[number]`; admin overview counts problems and late shipments; seller dashboard shows orders to ship. `/api/cron/daily` runs every time-based job (the schedule in `vercel.json` now points to it).
+- **Lost-confirmation fixes:** status-changing actions (accept, ship, seller cancel, confirm, buyer cancel, resolve, refund) redirect to a page-level banner instead of returning a message from a form that disappears.
+
+**Verified**
+- `npm run check` (Vitest 106/106; 5 new: state machine permissions, deadlines, reportable reasons, backoff), `next build` clean, migration zero drift.
+- Playwright 47/47 on two consecutive full runs. New fulfilment journey (desktop): accept → ship (rider phone required) → buyer sees the rider and confirms → after the hold (time-travelled), GH₵70.50 available and "Earnings released" in the history → an unconfirmed shipment auto-confirms after 7 days → a "faulty" report with a photo freezes release past the hold; the seller responds; the admin sees the photo and refunds GH₵20 (GH₵2 commission returned) → release goes ahead (GH₵123.00 available) → a late shipment triggers the overdue email and the buyer cancels for a refund (stock returns) → a seller cancellation refunds the buyer.
+- Test isolation: the delivery-band test moved to `tests/e2e/settings.spec.ts` in its own Playwright project that runs after everything else (it had changed a fee under a parallel suite); job tests assert outcomes, not counts.
+
+**Not verified / notes**
+- SMS notifications: later. Email delivery itself is still the local outbox until Resend is configured.
+- Admin "mark delivered" override and returns logistics (who ships the item back) are handled outside the system for now; the admin decides refunds.
+

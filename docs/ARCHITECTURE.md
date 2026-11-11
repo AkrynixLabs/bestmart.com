@@ -59,6 +59,13 @@ Prisma 7 with the `@prisma/adapter-pg` (node-postgres) driver adapter. The same 
 - **Money where it sits:** the platform's Paystack balance holds buyer payments. The `LedgerEntry` table records what each seller is owed (sale +, commission −, delivery +; refunds −, commission returned +), in `pending` until delivery is confirmed and the hold passes (Phase 5), then `available` for payouts (after Phase 5).
 - **Refunds** reserve their amount on the sub-order under a row lock, call the provider, and write ledger entries once the provider confirms.
 
+## Fulfilment
+
+- **State machine** (`lib/fulfilment/rules.ts`): each seller's sub-order goes paid → processing → shipped → delivered → completed, or is cancelled (and refunded) before shipping. `allowed(status, action, actor)` decides who can do what; `transition()` applies a change as a conditional update and records a `SubOrderEvent`, the timeline shown to everyone.
+- **Clocks:** the shipping deadline (`shipBy`, set at payment), auto-confirmation (shipped + N days) and earnings release (delivered + hold days) are timestamps checked by `runFulfilmentJobs()`, run daily by `/api/cron/daily` and on order and earnings page views. An open `Dispute` stops both auto-confirmation and release.
+- **Disputes** are separate records (reason, description, private photos, seller response, outcome) resolved by an admin through `issueRefund`.
+- **Email outbox:** `enqueueEmail(tx, …)` inside the transaction, `flushOutbox()` afterwards and from the cron, with exponential backoff and a cap on attempts.
+
 ## Observability
 
 - `lib/logger.ts`: one-line JSON logs with key-based secret redaction (tokens, passwords, Ghana Card numbers).
