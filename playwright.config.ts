@@ -13,8 +13,10 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"] } },
-    { name: "mobile", use: { ...devices["Pixel 7"] } },
+    { name: "desktop", use: { ...devices["Desktop Chrome"] }, testIgnore: /settings\.spec\.ts/ },
+    { name: "mobile", use: { ...devices["Pixel 7"] }, testIgnore: /settings\.spec\.ts/ },
+    // Tests that change platform-wide settings run last, alone, so parallel tests never see changed values.
+    { name: "settings", use: { ...devices["Desktop Chrome"] }, testMatch: /settings\.spec\.ts/, dependencies: ["desktop", "mobile"] },
   ],
   // Runs against a production build (`npm run build` first), which is what ships.
   webServer: {

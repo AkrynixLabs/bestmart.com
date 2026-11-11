@@ -131,3 +131,31 @@ export function expireOrder(number: string) {
 export function resetDeliverySettings() {
   execFileSync("npx", ["tsx", "tests/e2e/support/reset-delivery.ts"], { stdio: "pipe" })
 }
+
+/** Test-only: moves an order's shipBy / shippedAt / deliveredAt N days into the past. */
+export function timeTravel(orderNumber: string, field: "shipBy" | "shippedAt" | "deliveredAt", daysAgo: number) {
+  execFileSync("npx", ["tsx", "tests/e2e/support/time-travel.ts", orderNumber, field, String(daysAgo)], { stdio: "pipe" })
+}
+
+/** As a signed-in shopper with a saved address: buys `quantity` of a product and pays through the stand-in. Returns the order number. */
+export async function buyAndPay(page: Page, productPath: string, quantity = "1") {
+  await page.goto(productPath)
+  await page.getByLabel("Quantity").selectOption(quantity)
+  await page.getByRole("button", { name: "Add to cart" }).click()
+  await expect(page.getByText("Added to your cart.")).toBeVisible()
+  await page.goto("/checkout")
+  await page.getByRole("button", { name: /Place order/ }).click()
+  await expect(page).toHaveURL(/\/orders\/BM-\d{6}-[0-9A-Z]{5}\?placed=1/)
+  const number = new URL(page.url()).pathname.split("/").pop()!
+  await page.getByRole("button", { name: /^Pay / }).click()
+  await page.getByRole("button", { name: "Approve test Mobile Money payment" }).click()
+  await expect(page).toHaveURL(new RegExp(`/orders/${number}\\?payment=paid`))
+  return number
+}
+
+/** Test-only: runs the daily jobs (expiry, auto-confirm, release, overdue notices, emails). */
+export async function runDailyJobs(page: Page) {
+  const res = await page.request.get("/api/cron/daily")
+  expect(res.ok()).toBe(true)
+  return (await res.json()) as { confirmed: number; released: number; overdue: number }
+}

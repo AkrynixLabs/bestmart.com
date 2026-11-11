@@ -174,6 +174,6 @@ test.describe("payments journey", () => {
     await page.getByRole("button", { name: "Approve test Mobile Money payment" }).click()
     await expect(page).toHaveURL(new RegExp(`/orders/${order}\\?payment=refunded`))
     await expect(page.getByText("we've refunded it in full")).toBeVisible()
-    await expect(page.getByText("Refunded", { exact: true })).toBeVisible()
+    await expect(page.getByText("Refunded", { exact: true }).first()).toBeVisible()
   })
 })
