@@ -41,6 +41,9 @@ model PlatformSettings {
   deliveryRoadFactorPct   Int      @default(130)
   // A paid sub-order not shipped within this many days can be cancelled by the buyer for a full refund.
   shipWithinDays          Int      @default(3)
+  // Payouts: smallest balance paid out (pesewas) and the weekday the batch is drafted (0 = Sunday).
+  payoutMinimum           Int      @default(5000)
+  payoutWeekday           Int      @default(1)
   supportEmail            String?
   supportPhone            String?
   updatedAt               DateTime @updatedAt
@@ -88,6 +91,8 @@ model User {
   refundsIssued        Refund[]
   disputesOpened       Dispute[]            @relation("disputeOpener")
   disputesResolved     Dispute[]            @relation("disputeResolver")
+  batchesPrepared      PayoutBatch[]        @relation("batchPreparer")
+  batchesApproved      PayoutBatch[]        @relation("batchApprover")
   sellerApplications   SellerApplication[]  @relation("applicant")
   reviewedApplications SellerApplication[]  @relation("reviewer")
   store                Store?
@@ -253,6 +258,11 @@ model Store {
   payoutProvider      String
   payoutAccountName   String
   payoutAccountNumber String
+  // Paystack bank code for bank accounts (MoMo networks map automatically).
+  payoutBankCode      String?
+  // Paystack transfer recipient, and which payout details it was created for.
+  payoutRecipientCode String?
+  payoutRecipientKey  String?
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
@@ -262,6 +272,7 @@ model Store {
   categorySuggestions CategorySuggestion[]
   subOrders           SubOrder[]
   ledgerEntries       LedgerEntry[]
+  payouts             Payout[]
 
   @@map("stores")
 }
@@ -784,6 +795,7 @@ model LedgerEntry {
   storeId    String
   subOrderId String?
   refundId   String?
+  payoutId   String?
   kind       LedgerKind
   amount     Int
   bucket     LedgerBucket @default(pending)
@@ -917,6 +929,71 @@ model EmailOutbox {
 
   @@index([status, sendAfter])
   @@map("email_outbox")
+}
+
+// ---------------------------------------------------------------------------
+// Payouts
+// ---------------------------------------------------------------------------
+
+enum PayoutBatchStatus {
+  draft // prepared, waiting for the Super Admin
+  sending // approved; transfers in progress
+  completed // every payout paid or failed
+  cancelled
+}
+
+enum PayoutStatus {
+  pending // in a draft batch
+  processing // transfer requested
+  paid
+  failed // transfer failed; the money went back to the seller's balance
+  cancelled // left out at approval (cancelled batch, below minimum, missing details)
+}
+
+model PayoutBatch {
+  id           String            @id @default(cuid())
+  status       PayoutBatchStatus @default(draft)
+  total        Int               @default(0)
+  preparedById String? // null when prepared by the Monday job
+  approvedById String?
+  approvedAt   DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  payouts    Payout[]
+  preparedBy User?    @relation("batchPreparer", fields: [preparedById], references: [id], onDelete: SetNull)
+  approvedBy User?    @relation("batchApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@map("payout_batches")
+}
+
+// One transfer to one seller. The seller's available balance is debited
+// (a `payout` ledger entry) when the batch is approved; a failed transfer
+// is credited back with an `adjustment` entry.
+model Payout {
+  id            String       @id @default(cuid())
+  batchId       String
+  storeId       String
+  amount        Int // pesewas
+  status        PayoutStatus @default(pending)
+  // Our transfer reference, unique across all payouts.
+  reference     String       @unique
+  transferCode  String?
+  // Why it can't be sent (e.g. bank not recognised); cleared when fixed.
+  issue         String?
+  failureReason String?
+  paidAt        DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  batch PayoutBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  store Store       @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([batchId, storeId])
+  @@index([storeId, createdAt])
+  @@index([status])
+  @@map("payouts")
 }
 
 // ---------------------------------------------------------------------------
