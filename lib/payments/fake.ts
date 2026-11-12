@@ -83,4 +83,28 @@ export const fakeProvider: PaymentProvider = {
   verifySignature(rawBody, signature) {
     return signatureMatches(rawBody, signature, FAKE_SECRET)
   },
+
+  async listBanks() {
+    return FAKE_BANKS
+  },
+
+  async createRecipient(input) {
+    // Encodes the account number so transfer() can simulate failures.
+    return `RCP_test_${input.bankCode}_${input.accountNumber}`
+  },
+
+  async transfer({ recipientCode, reference }) {
+    // Test rule: accounts ending in 999 fail, like a closed account would.
+    if (recipientCode.endsWith("999")) return { transferCode: `TRF_test_${reference}`, status: "failed", failureReason: "Account could not be credited (test)" }
+    return { transferCode: `TRF_test_${reference}`, status: "success" }
+  },
 }
+
+/** A few real Ghana bank names with made-up codes, for development. */
+export const FAKE_BANKS = [
+  { name: "GCB Bank Limited", code: "TEST-GCB" },
+  { name: "Ecobank Ghana Limited", code: "TEST-ECO" },
+  { name: "Fidelity Bank Ghana Limited", code: "TEST-FID" },
+  { name: "Stanbic Bank Ghana Limited", code: "TEST-STB" },
+  { name: "Absa Bank Ghana Limited", code: "TEST-ABS" },
+]

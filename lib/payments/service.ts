@@ -287,6 +287,11 @@ export async function handlePaymentEvent(event: string, data: Record<string, unk
     await confirmPayment(data.reference)
     return
   }
+  if (event.startsWith("transfer.")) {
+    const { handleTransferEvent } = await import("@/lib/payouts/service")
+    await handleTransferEvent(event, data)
+    return
+  }
   if ((event === "refund.processed" || event === "refund.failed") && (typeof data.id === "number" || typeof data.id === "string")) {
     const refund = await prisma.refund.findFirst({ where: { providerRefundId: String(data.id) } })
     if (!refund) return

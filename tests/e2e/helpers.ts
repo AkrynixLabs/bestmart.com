@@ -68,7 +68,15 @@ export function formMessage(page: Page, role: "alert" | "status" = "alert") {
 export const PASSWORD = "Accra2026pass"
 
 /** Signs up `seller`, applies to sell, and has `admin` (created if needed) approve it. Ends signed out. */
-export async function createApprovedSeller(page: Page, seller: { name: string; email: string }, admin: { name: string; email: string }, storeName: string) {
+export type PayoutDetails = { method: "momo"; network: "MTN" | "Telecel" | "AirtelTigo"; number: string } | { method: "bank"; bank: string; number: string }
+
+export async function createApprovedSeller(
+  page: Page,
+  seller: { name: string; email: string },
+  admin: { name: string; email: string },
+  storeName: string,
+  payout: PayoutDetails = { method: "momo", network: "MTN", number: "0241234567" },
+) {
   await signUpAndVerify(page, { ...seller, password: PASSWORD })
   await logIn(page, seller.email, PASSWORD)
   await page.goto("/sell/apply")
@@ -78,8 +86,14 @@ export async function createApprovedSeller(page: Page, seller: { name: string; e
   await page.getByLabel("Town or city").fill("Accra")
   await page.getByLabel("Ghana Card number").fill("GHA-123456789-0")
   await page.getByLabel(/Photo or scan of your Ghana Card/).setInputFiles("tests/e2e/fixtures/ghana-card.png")
-  await page.getByLabel("Network").selectOption("MTN")
-  await page.getByLabel("MoMo number").fill("0241234567")
+  if (payout.method === "momo") {
+    await page.getByLabel("Network").selectOption(payout.network)
+    await page.getByLabel("MoMo number").fill(payout.number)
+  } else {
+    await page.getByLabel("Payout method").selectOption("bank_account")
+    await page.getByLabel("Bank name").fill(payout.bank)
+    await page.getByLabel("Account number").fill(payout.number)
+  }
   await page.getByLabel(/I confirm these details/).check()
   await page.getByRole("button", { name: "Submit application" }).click()
   await expect(page.getByText("Your application is under review")).toBeVisible()

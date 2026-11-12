@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test"
 
 const port = Number(process.env.E2E_PORT ?? 3100)
+const GLOBAL = /(settings|payouts)\.spec\.ts/
 
 export default defineConfig({
   testDir: "tests/e2e",
@@ -13,10 +14,12 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"] }, testIgnore: /settings\.spec\.ts/ },
-    { name: "mobile", use: { ...devices["Pixel 7"] }, testIgnore: /settings\.spec\.ts/ },
-    // Tests that change platform-wide settings run last, alone, so parallel tests never see changed values.
+    { name: "desktop", use: { ...devices["Desktop Chrome"] }, testIgnore: GLOBAL },
+    { name: "mobile", use: { ...devices["Pixel 7"] }, testIgnore: GLOBAL },
+    // Tests that change platform-wide state run last, one project after another, so no other test
+    // sees a changed fee (settings) or an emptied balance (payouts pay every eligible seller).
     { name: "settings", use: { ...devices["Desktop Chrome"] }, testMatch: /settings\.spec\.ts/, dependencies: ["desktop", "mobile"] },
+    { name: "payouts", use: { ...devices["Desktop Chrome"] }, testMatch: /payouts\.spec\.ts/, dependencies: ["settings"] },
   ],
   // Runs against a production build (`npm run build` first), which is what ships.
   webServer: {

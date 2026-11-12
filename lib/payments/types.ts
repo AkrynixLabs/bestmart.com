@@ -23,6 +23,18 @@ export type VerifiedTransaction = {
 
 export type RefundResult = { providerRefundId: string; status: "pending" | "processed" | "failed" }
 
+export type RecipientInput = {
+  kind: "mobile_money" | "bank_account"
+  /** Paystack bank code: "MTN" / "VOD" / "ATL" for MoMo, or a bank's code. */
+  bankCode: string
+  accountName: string
+  accountNumber: string
+}
+
+export type TransferResult = { transferCode: string; status: "pending" | "success" | "failed"; failureReason?: string }
+
+export type Bank = { name: string; code: string }
+
 export interface PaymentProvider {
   readonly name: string
   /** Starts a payment; returns the provider's hosted checkout URL. */
@@ -33,4 +45,10 @@ export interface PaymentProvider {
   refund(input: { reference: string; amount: number; note: string }): Promise<RefundResult>
   /** Checks a webhook really came from the provider. */
   verifySignature(rawBody: string, signature: string | null): boolean
+  /** Ghana banks that can receive transfers. */
+  listBanks(): Promise<Bank[]>
+  /** Registers a seller's payout account; returns the recipient code. */
+  createRecipient(input: RecipientInput): Promise<string>
+  /** Sends money from the platform balance to a recipient. */
+  transfer(input: { amount: number; recipientCode: string; reference: string; reason: string }): Promise<TransferResult>
 }

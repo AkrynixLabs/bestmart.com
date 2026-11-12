@@ -3,7 +3,7 @@ import "server-only"
 import { logger } from "@/lib/logger"
 
 import { signatureMatches } from "./signature"
-import type { PaymentProvider, RefundResult, VerifiedTransaction } from "./types"
+import type { Bank, PaymentProvider, RefundResult, TransferResult, VerifiedTransaction } from "./types"
 
 // Paystack REST API (https://paystack.com/docs/api). Amounts are in the
 // currency's subunit, which for GHS is pesewas, matching our own storage.
@@ -81,6 +81,35 @@ export function createPaystack(secretKey: string): PaymentProvider {
 
     verifySignature(rawBody, signature) {
       return signatureMatches(rawBody, signature, secretKey)
+    },
+
+    async listBanks(): Promise<Bank[]> {
+      const banks = await call<{ name: string; code: string; type: string }[]>("/bank?currency=GHS&perPage=200")
+      return banks.filter((b) => b.type !== "mobile_money").map((b) => ({ name: b.name, code: b.code }))
+    },
+
+    async createRecipient(input) {
+      const d = await call<{ recipient_code: string }>("/transferrecipient", {
+        method: "POST",
+        body: {
+          type: input.kind === "mobile_money" ? "mobile_money" : "ghipss",
+          name: input.accountName,
+          account_number: input.accountNumber,
+          bank_code: input.bankCode,
+          currency: "GHS",
+        },
+      })
+      return d.recipient_code
+    },
+
+    async transfer({ amount, recipientCode, reference, reason }): Promise<TransferResult> {
+      const d = await call<{ transfer_code: string; status: string }>("/transfer", {
+        method: "POST",
+        body: { source: "balance", amount, recipient: recipientCode, reference, reason: reason.slice(0, 100), currency: "GHS" },
+      })
+      // "otp" means OTP is still switched on in the Paystack dashboard: automation needs it off.
+      if (d.status === "otp") return { transferCode: d.transfer_code, status: "failed", failureReason: "Paystack asked for an OTP: disable transfer OTP in the Paystack dashboard" }
+      return { transferCode: d.transfer_code, status: d.status === "success" ? "success" : d.status === "failed" ? "failed" : "pending" }
     },
   }
 }

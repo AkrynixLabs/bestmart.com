@@ -173,3 +173,17 @@ export function sellerCancelledMessage(name: string, orderNumber: string, storeN
   const action = { label: "View your order", url: `${appUrl()}/orders/${orderNumber}` }
   return { subject: `Cancelled by the seller: order ${orderNumber}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
 }
+
+export function payoutSentMessage(name: string, storeName: string, amount: number, destination: string) {
+  const title = "You've been paid"
+  const lines = [`Hi ${name},`, `We've sent ${ghs(amount)} for ${storeName} to your ${destination}.`, "Networks and banks can take a little while to show it."]
+  const action = { label: "View earnings", url: `${appUrl()}/seller/earnings` }
+  return { subject: `Payout sent: ${ghs(amount)}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
+}
+
+export function payoutFailedMessage(name: string, storeName: string, amount: number, reason: string) {
+  const title = "We couldn't send your payout"
+  const lines = [`Hi ${name},`, `The payout of ${ghs(amount)} for ${storeName} didn't go through: ${reason}.`, "The money is back in your available balance and will be included in the next payout. Please check your payout details with our support team."]
+  const action = { label: "View earnings", url: `${appUrl()}/seller/earnings` }
+  return { subject: `Payout not sent: ${ghs(amount)}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
+}
