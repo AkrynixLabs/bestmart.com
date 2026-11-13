@@ -22,7 +22,7 @@ const kindLabel: Record<string, string> = {
 export default async function SellerEarningsPage() {
   const { store } = await requireSellerStore("/seller/earnings")
   await catchUpFulfilment()
-  const [buckets, entries, settings] = await Promise.all([
+  const [buckets, entries, settings, payouts] = await Promise.all([
     prisma.ledgerEntry.groupBy({ by: ["bucket"], where: { storeId: store.id }, _sum: { amount: true } }),
     prisma.ledgerEntry.findMany({
       where: { storeId: store.id },
@@ -31,6 +31,7 @@ export default async function SellerEarningsPage() {
       include: { subOrder: { select: { order: { select: { number: true } } } } },
     }),
     getPlatformSettings(),
+    prisma.payout.findMany({ where: { storeId: store.id, status: { in: ["processing", "paid", "failed"] } }, orderBy: { createdAt: "desc" }, take: 10 }),
   ])
   const sum = (bucket: string) => buckets.find((b) => b.bucket === bucket)?._sum.amount ?? 0
   return (
@@ -51,6 +52,25 @@ export default async function SellerEarningsPage() {
           <dd className="mt-1 text-2xl font-bold tabular-nums">{formatGhs(sum("available"))}</dd>
         </div>
       </dl>
+      {payouts.length > 0 ? (
+        <section>
+          <h2 className="font-semibold">Payouts</h2>
+          <ul className="mt-3 divide-y rounded-xl border text-sm">
+            {payouts.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 p-3">
+                <span>
+                  {p.status === "paid" ? "Sent" : p.status === "failed" ? "Failed (returned to your balance)" : "Sending"} to {store.payoutProvider}
+                  <span className="block text-xs text-muted-foreground">
+                    {(p.paidAt ?? p.createdAt).toLocaleDateString("en-GH", { dateStyle: "medium" })} · {p.reference}
+                  </span>
+                </span>
+                <span className="tabular-nums">{formatGhs(p.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section>
         <h2 className="font-semibold">Recent activity</h2>
         {entries.length === 0 ? (
