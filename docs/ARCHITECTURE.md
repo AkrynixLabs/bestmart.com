@@ -59,6 +59,11 @@ Prisma 7 with the `@prisma/adapter-pg` (node-postgres) driver adapter. The same 
 - **Money where it sits:** the platform's Paystack balance holds buyer payments. The `LedgerEntry` table records what each seller is owed (sale +, commission −, delivery +; refunds −, commission returned +), in `pending` until delivery is confirmed and the hold passes (Phase 5), then `available` for payouts (after Phase 5).
 - **Refunds** reserve their amount on the sub-order under a row lock, call the provider, and write ledger entries once the provider confirms.
 
+## Payouts
+
+- **Weekly batch** (`lib/payouts/service.ts`): drafted on the payout weekday by the daily job (or "Prepare now"), listing every active store whose available balance is at least the minimum. Typed bank names are matched against Paystack's list; unclear ones are flagged for the Super Admin.
+- **Approval** claims the draft (`draft → sending`), then for each payout recomputes the available balance under a store row lock, debits it (`payout` ledger entry) and sends a Paystack Transfer to a cached recipient. Results arrive immediately or by `transfer.*` webhook: paid, or failed/reversed, which credits the amount back (`adjustment`). The batch completes when every payout is final.
+
 ## Fulfilment
 
 - **State machine** (`lib/fulfilment/rules.ts`): each seller's sub-order goes paid → processing → shipped → delivered → completed, or is cancelled (and refunded) before shipping. `allowed(status, action, actor)` decides who can do what; `transition()` applies a change as a conditional update and records a `SubOrderEvent`, the timeline shown to everyone.

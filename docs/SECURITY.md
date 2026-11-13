@@ -1,6 +1,6 @@
 # Security
 
-## In place (Phase 0-5)
+## In place (Phase 0-5, payouts)
 
 - **Security headers** on every response (`next.config.ts`): HSTS, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`; `X-Powered-By` removed.
 - **Validated configuration** (`lib/env.ts`); secrets are server-only (`server-only` import guard). Only `NEXT_PUBLIC_*` values reach the browser.
@@ -27,6 +27,7 @@
 - **Fulfilment authorization:** sellers only see and act on their own store's sub-orders (store id in every query; another store's id is a 404); buyers only their own orders; status changes are conditional updates that can't skip steps (e.g. sellers can't confirm their own deliveries). Buyer addresses and phone numbers are shown to the seller only for paid orders they must deliver.
 - **Dispute evidence** photos are content-checked images in the private store, viewable only by admins through a sandboxed, non-cached route; every view is audit-logged.
 - **Emails** for fulfilment are written in the same transaction as the change (outbox), so none are lost or sent for changes that rolled back.
+- **Payouts** are Super Admin only and audit-logged (prepare, bank changes, approve, cancel). Approval requires an explicit confirmation, claims the batch so it can't be approved twice, recomputes each amount from the ledger under a row lock and debits it in the same transaction (a partial unique index allows one debit per payout); failed or reversed transfers are credited back. Only one batch can be open at a time (partial unique index). Bank names are never guessed: an unclear match needs an admin to choose.
 - **Proxy** redirects only GET/HEAD requests, so Server Action submissions are never answered with an HTML redirect.
 - **Search input** is length-capped and passed as bound parameters (`Prisma.sql`), never concatenated into SQL. JSON-LD escapes `<`.
 - **Test mode guard:** `E2E_TEST_MODE=1` (local outbox, local storage, no rate limits) is ignored when `VERCEL_ENV=production`, and production without Resend/Blob keys refuses to start those features rather than silently falling back.

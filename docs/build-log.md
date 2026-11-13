@@ -166,3 +166,23 @@ Also added an npm `overrides` entry so `@vercel/cli-config`'s nested `zod` uses 
 - SMS notifications: later. Email delivery itself is still the local outbox until Resend is configured.
 - Admin "mark delivered" override and returns logistics (who ships the item back) are handled outside the system for now; the admin decides refunds.
 
+## 2026-11-12 to 2026-11-13: Payouts (Phase 4b)
+
+**Decided with the user:** BestMart absorbs Paystack's transfer fee; the batch is drafted every Monday (setting) for the Super Admin to approve; minimum GH₵50 (placeholder setting).
+
+**Built**
+- **Data model** (migration `payouts`): `PayoutBatch` (draft → sending → completed / cancelled), `Payout` (amount, unique reference, transfer code, issue, failure reason), `LedgerEntry.payoutId`, `Store.payoutBankCode` / `payoutRecipientCode` / `payoutRecipientKey`, `PlatformSettings.payoutMinimum` / `payoutWeekday`. Partial unique indexes: one open batch; one ledger debit per payout.
+- **Provider:** `listBanks`, `createRecipient` (MoMo `mobile_money` with MTN/VOD/ATL codes, banks `ghipss`), `transfer` (source balance, our reference; an `otp` status is reported as a failure with the fix). Stand-in: a few Ghana bank names with test codes; transfers to accounts ending 999 fail.
+- **Service:** prepare (eligible balances, bank-code resolution or an issue), set bank code, cancel, approve (claim, lock, recompute, debit, send), mark paid/failed (credit back), webhook handling, Monday drafting from the daily job.
+- **Pages:** `/admin/payouts` (Super Admin: draft with destinations masked, bank picker for unrecognised banks, approve with a confirmation box, cancel, past batches with per-payout results); payouts section on `/seller/earnings`; payout sent / failed emails via the outbox.
+- **Tests:** payouts run in their own Playwright project after `settings` (they pay every eligible seller in the database, which would disturb parallel suites).
+
+**Verified**
+- Vitest 112/112 (6 new: bank matching incl. refusing to guess, MoMo codes, recipient fingerprint, Monday in Ghana time, references, masking). `next build` clean; migration zero drift.
+- Playwright 53/53 on two consecutive full runs. Payouts journey: three sellers each earn GH₵70.50 through the real flow (buy, pay, ship, confirm, hold); a seller gets 404 on `/admin/payouts`; the admin prepares a batch, picks GCB for the unrecognised "Sunshine Savings", approval is refused without the confirmation box, then sends: the MoMo seller is paid (balance GH₵0.00, "Sent to MTN", email), the rejected account's money returns (balance GH₵70.50, "Failed (returned to your balance)", email), the bank seller is paid.
+
+**Not verified / notes**
+- Real Paystack transfers (no keys yet). Paystack requires transfer OTP to be disabled for automated payouts, and a funded balance.
+- Approval sends transfers within the request; fine for tens of sellers, to be moved to a background job as volume grows.
+- A transfer whose result can't be confirmed (network error) stays "processing" with a note, for the webhook or a person to settle.
+
