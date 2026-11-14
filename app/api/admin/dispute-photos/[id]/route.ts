@@ -1,5 +1,5 @@
 import { audit } from "@/lib/audit"
-import { ADMIN_ROLES, getCurrentUser } from "@/lib/auth/session"
+import { routeAdmin } from "@/lib/auth/session"
 import { prisma } from "@/lib/prisma"
 import { clientIp } from "@/lib/request"
 import { getPrivate } from "@/lib/storage"
@@ -7,8 +7,8 @@ import { getPrivate } from "@/lib/storage"
 // Streams a dispute evidence photo to an admin: private, never cached,
 // sandboxed, and every view is audit-logged.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getCurrentUser()
-  if (!user || !ADMIN_ROLES.includes(user.role)) return new Response("Not found", { status: 404 })
+  const user = await routeAdmin()
+  if (!user) return new Response("Not found", { status: 404 })
   const { id } = await params
   const photo = await prisma.disputeAttachment.findUnique({ where: { id }, select: { key: true, disputeId: true } })
   if (!photo) return new Response("Not found", { status: 404 })

@@ -9,6 +9,7 @@ import { authConfig } from "./auth.config"
 // lib/auth/session.ts, against the database.
 const { auth } = NextAuth(authConfig)
 
+const ADMIN_PATH_HEADER = "x-bm-admin-path" // read in app/admin/layout.tsx
 const SIGNED_IN_ONLY = ["/account", "/seller", "/admin", "/sell/apply", "/checkout", "/orders"]
 const GUEST_ONLY = ["/login", "/signup"]
 
@@ -28,6 +29,13 @@ export default auth((req) => {
 
   if (signedIn && GUEST_ONLY.includes(pathname)) {
     return NextResponse.redirect(new URL("/account", req.url))
+  }
+
+  // Tell the admin layout which page was asked for, so two-factor can return there.
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) {
+    const headers = new Headers(req.headers)
+    headers.set(ADMIN_PATH_HEADER, pathname)
+    return NextResponse.next({ request: { headers } })
   }
 
   return NextResponse.next()

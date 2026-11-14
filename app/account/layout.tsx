@@ -1,6 +1,6 @@
 import Link from "next/link"
 
-import { requireUser } from "@/lib/auth/session"
+import { isAdmin, requireUser } from "@/lib/auth/session"
 
 const links = [
   { href: "/account", label: "Profile & security" },
@@ -17,7 +17,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
         <p className="text-sm text-muted-foreground">Signed in as</p>
         <p className="truncate font-semibold">{user.name}</p>
         <nav aria-label="Account" className="mt-4 grid gap-1 text-sm">
-          {links.map((link) => (
+          {[...links, ...(isAdmin(user.role) ? [{ href: "/account/two-factor", label: "Two-factor sign-in" }] : [])].map((link) => (
             <Link key={link.href} href={link.href} className="rounded-md px-3 py-2 hover:bg-muted">
               {link.label}
             </Link>

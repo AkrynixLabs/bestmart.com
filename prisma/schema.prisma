@@ -81,10 +81,17 @@ model User {
   role            Role       @default(customer)
   status          UserStatus @default(active)
   lastLoginAt     DateTime?
+  // Two-factor sign-in (required for admins). The TOTP secret is encrypted
+  // (AES-256-GCM, key derived from AUTH_SECRET); set during setup, active
+  // once totpEnabledAt is set. totpLastStep blocks reusing a code.
+  totpSecret      String?
+  totpEnabledAt   DateTime?
+  totpLastStep    Int?
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
   authTokens           AuthToken[]
+  recoveryCodes        RecoveryCode[]
   addresses            Address[]
   cart                 Cart?
   orders               Order[]
@@ -123,6 +130,20 @@ model AuthToken {
 
   @@index([userId, purpose])
   @@map("auth_tokens")
+}
+
+// One-time codes for when an admin loses their authenticator. Hashed.
+model RecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String    @unique
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("recovery_codes")
 }
 
 // ---------------------------------------------------------------------------

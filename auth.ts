@@ -4,6 +4,7 @@ import Google from "next-auth/providers/google"
 
 import { authConfig } from "./auth.config"
 import { burnPasswordCheck, verifyPassword } from "./lib/auth/password"
+import { clearTwoFactorCookie } from "./lib/auth/two-factor"
 import { logger } from "./lib/logger"
 import { prisma } from "./lib/prisma"
 import { checkRateLimit } from "./lib/rate-limit"
@@ -69,6 +70,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
     ...(googleConfigured ? [Google] : []),
   ],
+  events: {
+    // A new sign-in (or sign-out) always starts without admin two-factor verification.
+    async signIn() {
+      await clearTwoFactorCookie()
+    },
+    async signOut() {
+      await clearTwoFactorCookie()
+    },
+  },
   callbacks: {
     ...authConfig.callbacks,
     async signIn({ account, profile }) {
