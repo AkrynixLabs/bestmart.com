@@ -1,6 +1,6 @@
 # Security
 
-## In place (Phase 0-5, payouts)
+## In place (Phase 0-6)
 
 - **Security headers** on every response (`next.config.ts`): HSTS, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`; `X-Powered-By` removed.
 - **Validated configuration** (`lib/env.ts`); secrets are server-only (`server-only` import guard). Only `NEXT_PUBLIC_*` values reach the browser.
@@ -28,6 +28,9 @@
 - **Dispute evidence** photos are content-checked images in the private store, viewable only by admins through a sandboxed, non-cached route; every view is audit-logged.
 - **Emails** for fulfilment are written in the same transaction as the change (outbox), so none are lost or sent for changes that rolled back.
 - **Payouts** are Super Admin only and audit-logged (prepare, bank changes, approve, cancel). Approval requires an explicit confirmation, claims the batch so it can't be approved twice, recomputes each amount from the ledger under a row lock and debits it in the same transaction (a partial unique index allows one debit per payout); failed or reversed transfers are credited back. Only one batch can be open at a time (partial unique index). Bank names are never guessed: an unclear match needs an admin to choose.
+- **Admin two-factor:** admins must pass TOTP (authenticator app) before any admin page, admin Server Action or admin-only file/export route; the secret is AES-256-GCM encrypted with an HKDF key from `AUTH_SECRET`; a used 30-second step can't be replayed; 8 one-time recovery codes are stored hashed and shown once; attempts are rate-limited (10 per 15 min) and failures audit-logged. A verified browser gets a signed, httpOnly cookie bound to the user id for 12 hours, cleared on every sign-in and sign-out. The Super Admin can reset an admin's two-factor; demoted admins lose it.
+- **Separation of duties:** ops admins handle orders, refunds, disputes, applications, moderation and customer/store suspensions; only the Super Admin changes settings and roles, approves payouts, resets two-factor, reads reports and the audit log, and acts on admin accounts. Nobody can change their own role or status. Suspended accounts are signed out on their next request (role and status are re-read from the database).
+- **CSV exports** neutralise cells starting with = + - @ (formula injection) and are audit-logged.
 - **Proxy** redirects only GET/HEAD requests, so Server Action submissions are never answered with an HTML redirect.
 - **Search input** is length-capped and passed as bound parameters (`Prisma.sql`), never concatenated into SQL. JSON-LD escapes `<`.
 - **Test mode guard:** `E2E_TEST_MODE=1` (local outbox, local storage, no rate limits) is ignored when `VERCEL_ENV=production`, and production without Resend/Blob keys refuses to start those features rather than silently falling back.
@@ -38,7 +41,6 @@
 |---|---|
 | 4 | Strict Content-Security-Policy with nonces (Paystack, Sentry and `tile.openstreetmap.org` image origins) |
 | 4b | Restrict the webhook route to Paystack's published IP addresses as defence in depth |
-| 6 | Admin audit log viewer; two-factor sign-in for admin accounts (proposed) |
 | 9 | Pre-launch review: OWASP checklist, dependency review, backup/restore drill |
 
 ## Known exceptions

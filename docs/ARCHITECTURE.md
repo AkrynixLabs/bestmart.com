@@ -71,6 +71,11 @@ Prisma 7 with the `@prisma/adapter-pg` (node-postgres) driver adapter. The same 
 - **Disputes** are separate records (reason, description, private photos, seller response, outcome) resolved by an admin through `issueRefund`.
 - **Email outbox:** `enqueueEmail(tx, …)` inside the transaction, `flushOutbox()` afterwards and from the cron, with exponential backoff and a cap on attempts.
 
+## Admin security
+
+- **Two-factor** for admin roles: `requireRole`, `actionUser` and `routeAdmin` (in `lib/auth/session.ts`) require a TOTP-verified browser for any admin access. The verification is a signed cookie bound to the user id, valid 12 hours, cleared on sign-in and sign-out.
+- **Roles:** ops admins run day-to-day operations; the Super Admin alone changes settings and roles, approves payouts and reads reports and the audit log.
+
 ## Observability
 
 - `lib/logger.ts`: one-line JSON logs with key-based secret redaction (tokens, passwords, Ghana Card numbers).

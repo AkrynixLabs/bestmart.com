@@ -42,10 +42,11 @@ The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working
 - [x] Returns and disputes (with photo evidence), handled in the admin area; shipping deadline with buyer cancellation; seller cancellation
 - [x] Fulfilment emails (shipped, delivered, overdue, disputes, cancellations) via a transactional outbox with retries
 
-## Phase 6 — Admin
-- [ ] Seller applications, product moderation, orders, disputes, refunds, payouts
-- [ ] Settings: commission, category overrides, delivery fees, time windows
-- [ ] Reports (sales, commission, top sellers) and audit log viewer
+## Phase 6 — Admin ✅ (built 2026-11-15)
+- [x] Seller applications, product moderation, orders, disputes, refunds, payouts (built in earlier phases)
+- [x] Settings: commission, category overrides, delivery fees, time windows, payout rules, support contacts
+- [x] Reports (sales, commission, Paystack fees, refunds, payouts, net revenue, daily, top sellers and categories, CSV) and audit log viewer
+- [x] People: suspend/reinstate accounts and stores, ops admin roles; two-factor sign-in required for admins
 
 ## Phase 7 — Engagement
 - [ ] Verified-purchase reviews and ratings
@@ -75,3 +76,4 @@ The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working
 - **2026-11-09** — Phase 4a done: buyers pay for orders (Mobile Money or card through Paystack, tested with a local stand-in until real keys arrive); sellers see their earnings held as pending; admins can refund all or part of an order. Fixed a sign-in crash. Next: test against real Paystack once keys arrive; then Phase 5, fulfilment (shipping, delivery confirmation), then payouts.
 - **2026-11-11** — Phase 5 done: sellers accept and ship orders (saying who delivers), buyers confirm delivery or it confirms itself after 7 days, and the seller's money becomes available 3 days later. Buyers can cancel late shipments for a refund or report problems with photos; admins resolve them. Next: weekly payouts to sellers.
 - **2026-11-13** — Payouts done: every Monday a payout batch is drafted for sellers with at least GH₵50 available; the Super Admin approves it and the money goes to their MoMo or bank account (failed transfers return to the seller's balance). The money flow is complete end to end. Next: Phase 6, the admin area (settings, reports).
+- **2026-11-15** — Phase 6 done: admins sign in with a second step (authenticator app) and recovery codes; the Super Admin edits every business rule from one page, manages people and admin roles, reads money reports (with a CSV for the accountant) and the audit log. Next: Phase 7, reviews, wishlist, messaging and coupons.

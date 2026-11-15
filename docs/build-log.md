@@ -186,3 +186,24 @@ Also added an npm `overrides` entry so `@vercel/cli-config`'s nested `zod` uses 
 - Approval sends transfers within the request; fine for tens of sellers, to be moved to a background job as volume grows.
 - A transfer whose result can't be confirmed (network error) stays "processing" with a note, for the webhook or a person to settle.
 
+## 2026-11-14 to 2026-11-15: Phase 6, admin
+
+**Decided with the user:** two-factor sign-in required for admins; reports with date ranges and CSV export.
+
+**Built**
+- **Two-factor** (migration `admin_two_factor`: `User.totpSecret` (encrypted) / `totpEnabledAt` / `totpLastStep`, `RecoveryCode`): RFC 6238 TOTP and base32 on node:crypto (no dependency; checked against the RFC test vectors), AES-256-GCM secret box and HMAC tokens keyed by HKDF(AUTH_SECRET). Setup page with the key and an `otpauth://` link (no QR code: it would need a library), 8 recovery codes shown once, verification with replay protection and rate limiting, a 12-hour verified cookie cleared on every sign-in and sign-out (Auth.js `events`). Enforcement in `requireRole`, `actionUser` and the new `routeAdmin` (KYC files, dispute photos, CSV export). The proxy forwards the requested admin path so verification returns to it.
+- **Settings:** one Super Admin form for commission, time to pay, ship-within, auto-confirm, payout hold, return window, low stock, payout minimum and day, support contacts; validated ranges; audit entry with only the changed fields (before and after).
+- **People:** search and filter users; suspend/reinstate accounts (reason required) and stores; make/remove ops admins (Super Admin; demotion clears two-factor); reset two-factor; recent orders and audit activity per person.
+- **Reports:** presets and custom ranges (Ghana days, max one year); sales, items, delivery, commission, commission returned, Paystack fees, refunds, payouts, net platform revenue; complete daily table; top sellers; categories rolled up to the top level; CSV export (formula-safe, audit-logged).
+- **Audit log viewer:** filter by action, actor email, record id; cursor pagination; metadata shown.
+
+**Fixed along the way:** the recovery codes vanished right after setup, because setting the verified cookie re-renders the page; the setup form now stays mounted for 10 minutes after setup on the verified browser, so the codes remain visible. The test helper's wait for `/admin` also matched the code page's own `?next=/admin` URL.
+
+**Verified**
+- Vitest 122/122 (10 new: TOTP RFC vectors, base32, verification window, otpauth link, encryption tamper/wrong-key, signed tokens, report ranges, CSV quoting and formula defusing). `next build` clean; migration zero drift.
+- Playwright 60/60 on two consecutive full runs (all admin flows now go through two-factor). Admin suite: a new admin is sent to setup from `/admin/orders`, a wrong code is refused, the right one shows 8 recovery codes and returns to `/admin/orders`; after signing in again a code is required, a recovery code works once and is refused the second time; ops admins get 404 on reports, audit, payouts and settings, customers on all of admin; suspending a store makes its page 404 and reinstating restores it; a suspended customer can't sign in; promoting a customer to ops admin sends them to two-factor setup; reports render and the CSV downloads, and both the export and the suspension appear in the audit log. Settings: an out-of-range value is refused, a change is saved and appears in the audit log with the field name.
+
+**Not verified / notes**
+- No QR code for setup (the key and an app link instead); a QR library can be added if admins want it.
+- Reports read live tables; fine at launch, may need summary tables at scale.
+
