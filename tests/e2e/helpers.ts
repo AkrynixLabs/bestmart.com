@@ -3,6 +3,8 @@ import { readdir, readFile } from "node:fs/promises"
 import path from "node:path"
 import { expect, type Page } from "@playwright/test"
 
+import { stepAt, totpAt } from "../../lib/auth/totp"
+
 const OUTBOX = path.join(process.cwd(), ".data", "outbox")
 
 export function uniqueEmail(prefix: string): string {
@@ -46,6 +48,14 @@ export async function logIn(page: Page, email: string, password: string) {
   await page.getByLabel("Password").fill(password)
   await page.getByRole("button", { name: "Sign in" }).click()
   await expect(page).toHaveURL(/\/account$/)
+  if (totpSecrets.has(email)) {
+    // Admins: pass two-factor now, so later admin pages open directly.
+    await page.goto("/account/two-factor?next=/admin")
+    await page.getByLabel("Code").fill(await freshTotp(email))
+    await page.getByRole("button", { name: "Verify" }).click()
+    // The admin overview itself (the code page's own URL also ends in "next=/admin").
+    await expect(page).toHaveURL(/^https?:\/\/[^/?]+\/admin$/)
+  }
 }
 
 export async function logOut(page: Page) {
@@ -56,8 +66,37 @@ export async function logOut(page: Page) {
   await page.context().clearCookies()
 }
 
-export function setRole(email: string, role: "customer" | "ops_admin" | "super_admin") {
+// Admins need two-factor. setRole() enrols it (unless asked not to) and
+// remembers the secret, and logIn() answers the code prompt with it.
+const totpSecrets = new Map<string, string>()
+const lastStep = new Map<string, number>()
+
+export function setRole(email: string, role: "customer" | "ops_admin" | "super_admin", { twoFactor = true } = {}) {
   execFileSync("npx", ["tsx", "scripts/set-role.ts", email, role], { stdio: "pipe" })
+  if (role !== "customer" && twoFactor) {
+    totpSecrets.set(email, execFileSync("npx", ["tsx", "tests/e2e/support/enroll-2fa.ts", email], { encoding: "utf8" }).trim())
+    lastStep.delete(email)
+  }
+}
+
+/** A code the server will accept: never a step already used (codes can't be replayed). */
+export async function freshTotp(email: string): Promise<string> {
+  const secret = totpSecrets.get(email)
+  if (!secret) throw new Error(`No two-factor secret known for ${email}`)
+  for (;;) {
+    const current = stepAt(Date.now())
+    const step = Math.max(current, (lastStep.get(email) ?? -1) + 1)
+    if (step <= current + 1) {
+      lastStep.set(email, step)
+      return totpAt(secret, step)
+    }
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+}
+
+/** For tests that set two-factor up through the UI: remember the secret they saw. */
+export function rememberTotpSecret(email: string, secret: string) {
+  totpSecrets.set(email, secret.replace(/\s/g, ""))
 }
 
 /** A form message with the given role, excluding Next.js's hidden route announcer (also role="alert"). */

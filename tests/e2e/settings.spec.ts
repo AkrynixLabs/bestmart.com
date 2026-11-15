@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test"
 
-import { createApprovedSeller, createPublishedProduct, logIn, logOut, PASSWORD, resetDeliverySettings, signUpAndVerify, statusWith, uniqueEmail } from "./helpers"
+import { createApprovedSeller, createPublishedProduct, logIn, logOut, PASSWORD, resetDeliverySettings, setRole, signUpAndVerify, statusWith, uniqueEmail } from "./helpers"
 
 // Tests that change platform-wide settings. They run in their own Playwright
 // project, after every other test, so no parallel test sees a changed value.
@@ -52,4 +52,25 @@ test.describe("platform settings", () => {
     await page.goto("/checkout")
     await expect(page.getByRole("button", { name: "Place order · GH₵80.00" })).toBeVisible() // 45 + 35
   })
+
+  test("the Super Admin changes a business rule; it's saved and audit-logged with before/after", async ({ page }) => {
+    const admin = { name: "Rules Admin", email: uniqueEmail("rulesadmin") }
+    await signUpAndVerify(page, { ...admin, password: PASSWORD })
+    setRole(admin.email, "super_admin")
+    await logIn(page, admin.email, PASSWORD)
+    await page.goto("/admin/settings")
+    await page.getByLabel("Ship within (days)").fill("0")
+    await page.getByRole("button", { name: "Save settings" }).click()
+    await expect(page.getByText("At least 1 day")).toBeVisible()
+    await page.getByLabel("Ship within (days)").fill("5")
+    await page.getByRole("button", { name: "Save settings" }).click()
+    await expect(statusWith(page, "Saved 1 change(s).")).toBeVisible()
+    await page.goto("/admin/audit?action=settings.updated")
+    await expect(page.getByText(/"shipWithinDays"/).first()).toBeVisible()
+    await page.goto("/admin/settings")
+    await page.getByLabel("Ship within (days)").fill("3")
+    await page.getByRole("button", { name: "Save settings" }).click()
+    await expect(statusWith(page, "Saved 1 change(s).")).toBeVisible()
+  })
 })
+
