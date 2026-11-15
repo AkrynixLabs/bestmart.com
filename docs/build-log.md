@@ -207,3 +207,11 @@ Also added an npm `overrides` entry so `@vercel/cli-config`'s nested `zod` uses 
 - No QR code for setup (the key and an app link instead); a QR library can be added if admins want it.
 - Reports read live tables; fine at launch, may need summary tables at scale.
 
+## 2026-11-15: Fix concurrent guest-cart merges
+
+**Problem:** a full Playwright run failed once at checkout right after sign-up: `Unique constraint failed on carts_userId_key`. Right after sign-in, the checkout page and the header's `/api/cart` request both merged the guest cart at the same moment; both tried to create the account cart, and the loser crashed the page. Two merges could also have doubled the quantities. (The failed setup step cancelled 12 dependent tests, which Playwright reported as "did not run".)
+
+**Fixed:** the merge locks the guest cart row (`SELECT … FOR UPDATE`) inside its transaction, so concurrent merges run one at a time and later ones find nothing to merge; the account-cart upsert no longer reads relations, so Prisma issues an atomic `INSERT … ON CONFLICT`.
+
+**Verified:** a script running 8 merges of the same guest cart at once: no errors, one account cart, quantity unchanged (2), guest cart removed. `npm run check`, `next build` and the full Playwright suite (see the commit's verification).
+

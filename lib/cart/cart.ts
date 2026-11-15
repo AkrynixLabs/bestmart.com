@@ -22,17 +22,26 @@ async function guestToken(): Promise<string | undefined> {
   return value && /^[A-Za-z0-9_-]{20,64}$/.test(value) ? value : undefined
 }
 
-/** Moves a guest cart's lines into the user's cart and deletes the guest cart. */
+/**
+ * Moves a guest cart's lines into the user's cart and deletes the guest cart.
+ * The guest cart row is locked first: right after sign-in, several requests
+ * (the page, the header's cart count) can try to merge at once, and only the
+ * first may do it; the others wait, then find nothing left to merge.
+ */
 async function mergeGuestCart(userId: string, token: string) {
-  const guest = await prisma.cart.findUnique({ where: { guestToken: token }, include: { items: true } })
-  if (!guest) return
   await prisma.$transaction(async (tx) => {
-    const cart = await tx.cart.upsert({ where: { userId }, update: {}, create: { userId }, include: { items: true } })
-    const merged = mergeQuantities(new Map(cart.items.map((i) => [i.variantId, i.quantity])), new Map(guest.items.map((i) => [i.variantId, i.quantity])))
+    const locked = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "carts" WHERE "guestToken" = ${token} FOR UPDATE`
+    const guestId = locked[0]?.id
+    if (!guestId) return
+    const guestItems = await tx.cartItem.findMany({ where: { cartId: guestId } })
+    // No relation reads in the upsert, so Prisma uses an atomic INSERT ... ON CONFLICT.
+    const cart = await tx.cart.upsert({ where: { userId }, update: {}, create: { userId } })
+    const existing = await tx.cartItem.findMany({ where: { cartId: cart.id } })
+    const merged = mergeQuantities(new Map(existing.map((i) => [i.variantId, i.quantity])), new Map(guestItems.map((i) => [i.variantId, i.quantity])))
     for (const [variantId, quantity] of merged) {
       await tx.cartItem.upsert({ where: { cartId_variantId: { cartId: cart.id, variantId } }, update: { quantity }, create: { cartId: cart.id, variantId, quantity } })
     }
-    await tx.cart.delete({ where: { id: guest.id } })
+    await tx.cart.deleteMany({ where: { id: guestId } })
   })
 }
 
