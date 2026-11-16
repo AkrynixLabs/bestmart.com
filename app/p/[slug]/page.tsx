@@ -5,12 +5,16 @@ import { BadgeCheck, Eye, ShieldCheck } from "lucide-react"
 
 import { Breadcrumbs } from "@/components/catalog/breadcrumbs"
 import { JsonLd } from "@/components/catalog/json-ld"
+import { SaveButton } from "@/components/reviews/save-button"
+import { Stars } from "@/components/reviews/stars"
 import { getCurrentUser, isAdmin } from "@/lib/auth/session"
 import { getCategoryTree } from "@/lib/catalog/categories"
 import { formatAttributeValue, readOptions } from "@/lib/catalog/product-rules"
 import { getProductBySlug, isProductPublic, type ProductWithDetails } from "@/lib/catalog/products"
 import { ancestry, effectiveAttributes } from "@/lib/catalog/tree"
 import { getPlatformSettings } from "@/lib/platform-settings"
+import { prisma } from "@/lib/prisma"
+import { distribution, reviewerName } from "@/lib/reviews/rules"
 import { appUrl, site } from "@/lib/site"
 import { regionLabel } from "@/lib/validation/common"
 
@@ -50,7 +54,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ProductPage({ params }: Props) {
   const { slug } = await params
   const { product, preview } = await loadProduct(slug)
-  const [tree, settings] = await Promise.all([getCategoryTree(), getPlatformSettings()])
+  const [tree, settings, user] = await Promise.all([getCategoryTree(), getPlatformSettings(), getCurrentUser()])
+  const [reviews, ratingCounts, saved] = await Promise.all([
+    prisma.review.findMany({ where: { productId: product.id, status: "visible" }, orderBy: { createdAt: "desc" }, take: 20, include: { user: { select: { name: true } } } }),
+    prisma.review.groupBy({ by: ["rating"], where: { productId: product.id, status: "visible" }, _count: { _all: true } }),
+    user ? prisma.wishlistItem.count({ where: { userId: user.id, productId: product.id } }) : Promise.resolve(0),
+  ])
   const variants = product.variants.filter((v) => v.isActive)
   const options = readOptions(product.options)
   const attributes = effectiveAttributes(tree, product.categoryId)
@@ -86,6 +95,11 @@ export default async function ProductPage({ params }: Props) {
               </Link>{" "}
               · {product.store.city}, {regionLabel[product.store.region]}
             </p>
+            {product.ratingCount > 0 && product.ratingAvg !== null ? (
+              <a href="#reviews" className="mt-2 inline-flex items-center gap-2 text-sm hover:underline">
+                <Stars rating={product.ratingAvg} /> {product.ratingAvg.toFixed(1)} ({product.ratingCount} review{product.ratingCount === 1 ? "" : "s"})
+              </a>
+            ) : null}
           </div>
 
           {variants.length > 0 ? (
@@ -97,6 +111,8 @@ export default async function ProductPage({ params }: Props) {
           ) : (
             <p className="text-sm text-muted-foreground">Not available right now.</p>
           )}
+
+          {!preview ? <SaveButton productId={product.id} initiallySaved={saved > 0} signedIn={Boolean(user)} returnTo={`/p/${product.slug}`} /> : null}
 
           <ul className="grid gap-3 rounded-xl bg-muted/60 p-4 text-sm">
             <li className="flex gap-3">
@@ -139,6 +155,58 @@ export default async function ProductPage({ params }: Props) {
         ) : null}
       </div>
 
+      <section id="reviews" aria-labelledby="reviews-heading" className="mt-12 scroll-mt-20">
+        <h2 id="reviews-heading" className="text-lg font-semibold">
+          Reviews
+        </h2>
+        {product.ratingCount === 0 || product.ratingAvg === null ? (
+          <p className="mt-2 text-sm text-muted-foreground">No reviews yet. Only buyers who received this product can review it.</p>
+        ) : (
+          <div className="mt-4 grid gap-8 md:grid-cols-[240px_1fr]">
+            <div>
+              <p className="text-4xl font-extrabold">{product.ratingAvg.toFixed(1)}</p>
+              <Stars rating={product.ratingAvg} size="md" />
+              <p className="mt-1 text-sm text-muted-foreground">
+                {product.ratingCount} verified review{product.ratingCount === 1 ? "" : "s"}
+              </p>
+              <ul className="mt-4 grid gap-1 text-sm">
+                {distribution(Object.fromEntries(ratingCounts.map((r) => [r.rating, r._count._all]))).map((d) => (
+                  <li key={d.stars} className="flex items-center gap-2">
+                    <span className="w-6 tabular-nums">{d.stars}★</span>
+                    <span className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                      <span className="block h-full bg-amber-400" style={{ width: `${d.percent}%` }} />
+                    </span>
+                    <span className="w-8 text-right tabular-nums text-muted-foreground">{d.count}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <ul className="grid content-start gap-5">
+              {reviews.map((r) => (
+                <li key={r.id} className="border-b pb-5 last:border-0">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <Stars rating={r.rating} />
+                    <span className="font-medium">{reviewerName(r.user.name)}</span>
+                    <span className="text-muted-foreground">· verified purchase · {r.createdAt.toLocaleDateString("en-GH", { dateStyle: "medium" })}</span>
+                  </div>
+                  {r.body ? <p className="mt-2 whitespace-pre-line text-sm">{r.body}</p> : null}
+                  {r.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={r.photoUrl} alt={`Photo from ${reviewerName(r.user.name)}'s review`} className="mt-2 size-28 rounded-md border object-cover" />
+                  ) : null}
+                  {r.sellerReply ? (
+                    <div className="mt-3 rounded-md bg-muted/60 p-3 text-sm">
+                      <p className="font-medium">Reply from {product.store.name}</p>
+                      <p className="mt-1 whitespace-pre-line">{r.sellerReply}</p>
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+
       {!preview && variants.length > 0 ? (
         <JsonLd
           data={{
@@ -148,6 +216,9 @@ export default async function ProductPage({ params }: Props) {
             description: plain(product.description, 5000),
             image: product.images.map((i) => (i.url.startsWith("http") ? i.url : `${appUrl()}${i.url}`)),
             sku: variants[0]?.sku,
+            ...(product.ratingCount > 0 && product.ratingAvg !== null
+              ? { aggregateRating: { "@type": "AggregateRating", ratingValue: product.ratingAvg.toFixed(1), reviewCount: product.ratingCount, bestRating: 5, worstRating: 1 } }
+              : {}),
             brand: specs.find((s) => s.name.toLowerCase() === "brand") ? { "@type": "Brand", name: specs.find((s) => s.name.toLowerCase() === "brand")!.value } : undefined,
             offers: {
               "@type": "AggregateOffer",

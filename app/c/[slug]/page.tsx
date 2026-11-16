@@ -57,6 +57,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
     text: filters.text,
     minPrice: filters.minPrice,
     maxPrice: filters.maxPrice,
+    minRating: filters.minRating,
     attributes: filters.attributes,
     sort: filters.sort,
     after: filters.after,

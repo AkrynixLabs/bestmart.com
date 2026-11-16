@@ -19,6 +19,7 @@ export function decodeCursor(raw: string | undefined, sort: CatalogSort): Cursor
     if (sort === "newest") {
       return typeof value === "string" && !Number.isNaN(Date.parse(value)) ? { value, id } : null
     }
+    if (sort === "rating") return typeof value === "number" && value >= 0 && value <= 5 ? { value, id } : null
     return typeof value === "number" && Number.isSafeInteger(value) ? { value, id } : null
   } catch {
     return null

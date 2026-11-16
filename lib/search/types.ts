@@ -2,7 +2,7 @@
 // CatalogQuery and get product ids back in order; a different engine
 // (Typesense, Meilisearch, ...) only has to implement CatalogSearch.
 
-export type CatalogSort = "relevance" | "newest" | "price_asc" | "price_desc"
+export type CatalogSort = "relevance" | "newest" | "price_asc" | "price_desc" | "rating"
 
 export type AttributeFilter =
   | { attributeId: string; kind: "values"; values: string[] } // text, select, multiselect: match any
@@ -16,6 +16,8 @@ export type CatalogQuery = {
   text?: string
   minPrice?: number // pesewas
   maxPrice?: number // pesewas
+  /** Only products averaging at least this many stars (1-5). */
+  minRating?: number
   attributes?: AttributeFilter[]
   sort: CatalogSort
   /** Opaque cursor from a previous page (keyset sorts). */

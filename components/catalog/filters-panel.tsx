@@ -17,7 +17,7 @@ const inputClass = "h-9 w-full rounded-md border border-input bg-background px-2
  */
 export function FiltersPanel({ pathname, params, attributes, showRelevance }: { pathname: string; params: SearchParams; attributes: TreeAttribute[]; showRelevance: boolean }) {
   const filterable = attributes.filter((a) => a.isFilterable && a.type !== "text")
-  const activeCount = Object.keys(params).filter((k) => k === "min" || k === "max" || k.startsWith("a.")).length
+  const activeCount = Object.keys(params).filter((k) => k === "min" || k === "max" || k === "rating" || k.startsWith("a.")).length
   return (
     <ResponsiveDetails className="rounded-xl border lg:border-0 [&>summary]:lg:hidden" defaultOpen={activeCount > 0 ? true : undefined}>
       <summary className="flex cursor-pointer items-center gap-2 p-3 text-sm font-medium lg:hidden">
@@ -45,6 +45,16 @@ export function FiltersPanel({ pathname, params, attributes, showRelevance }: { 
             <input name="max" inputMode="decimal" defaultValue={first(params.max)} placeholder="Max" aria-label="Maximum price" className={inputClass} />
           </div>
         </fieldset>
+
+        <label className="grid gap-1.5 text-sm font-medium">
+          Customer rating
+          <select name="rating" defaultValue={first(params.rating)} className={inputClass}>
+            <option value="">Any</option>
+            <option value="4">4 stars and up</option>
+            <option value="3">3 stars and up</option>
+            <option value="2">2 stars and up</option>
+          </select>
+        </label>
 
         {filterable.map((a) => {
           const field = `a.${a.key}`

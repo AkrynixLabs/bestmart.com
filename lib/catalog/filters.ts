@@ -15,6 +15,7 @@ export const SORTS: { value: CatalogSort; label: string }[] = [
   { value: "newest", label: "Newest" },
   { value: "price_asc", label: "Price: low to high" },
   { value: "price_desc", label: "Price: high to low" },
+  { value: "rating", label: "Top rated" },
 ]
 
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v)
@@ -25,6 +26,7 @@ export type ParsedFilters = {
   sort: CatalogSort
   minPrice?: number
   maxPrice?: number
+  minRating?: number
   attributes: AttributeFilter[]
   after?: string
   page?: number
@@ -65,11 +67,13 @@ export function parseFilters(params: SearchParams, filterable: TreeAttribute[]):
     }
   }
 
+  const ratingParam = Number(first(params.rating))
+  const minRating = [1, 2, 3, 4].includes(ratingParam) ? ratingParam : undefined
   const after = first(params.after)?.slice(0, 200) || undefined
   const pageNumber = Number(first(params.page))
   const page = Number.isInteger(pageNumber) && pageNumber > 1 ? pageNumber : undefined
-  const isFiltered = Boolean(text || first(params.sort) || minPrice !== undefined || maxPrice !== undefined || attributes.length || after || page)
-  return { text, sort, minPrice, maxPrice, attributes, after, page, isFiltered }
+  const isFiltered = Boolean(text || first(params.sort) || minPrice !== undefined || maxPrice !== undefined || minRating !== undefined || attributes.length || after || page)
+  return { text, sort, minPrice, maxPrice, minRating, attributes, after, page, isFiltered }
 }
 
 /** Builds a URL that keeps the current params, applies `changes`, and resets paging. */

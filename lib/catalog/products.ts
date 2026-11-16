@@ -17,6 +17,8 @@ export type ProductCard = {
   maxPrice: number
   compareAtPrice: number | null
   inStock: boolean
+  ratingAvg: number | null
+  ratingCount: number
   image: { url: string; alt: string } | null
   store: { name: string; slug: string }
 }
@@ -33,6 +35,8 @@ export async function getProductCards(ids: string[]): Promise<ProductCard[]> {
       minPrice: true,
       maxPrice: true,
       totalStock: true,
+      ratingAvg: true,
+      ratingCount: true,
       store: { select: { name: true, slug: true } },
       images: { orderBy: { sortOrder: "asc" }, take: 1, select: { url: true, alt: true } },
       variants: { where: { isActive: true }, orderBy: { price: "asc" }, take: 1, select: { compareAtPrice: true } },
@@ -52,6 +56,8 @@ export async function getProductCards(ids: string[]): Promise<ProductCard[]> {
         maxPrice: r.maxPrice,
         compareAtPrice: r.variants[0]?.compareAtPrice ?? null,
         inStock: r.totalStock > 0,
+        ratingAvg: r.ratingAvg,
+        ratingCount: r.ratingCount,
         image: image ? { url: image.url, alt: image.alt ?? r.title } : null,
         store: r.store,
       },

@@ -29,6 +29,7 @@ export const postgresCatalogSearch: CatalogSearch = {
     // A product matches a price filter if any of its variants could.
     if (q.minPrice !== undefined) where.push(Prisma.sql`p."maxPrice" >= ${q.minPrice}`)
     if (q.maxPrice !== undefined) where.push(Prisma.sql`p."minPrice" <= ${q.maxPrice}`)
+    if (q.minRating !== undefined) where.push(Prisma.sql`p."ratingAvg" >= ${q.minRating}`)
     if (text) {
       where.push(Prisma.sql`(p."searchVector" @@ websearch_to_tsquery('english', ${text}) OR ${text} <% p."title")`)
     }
@@ -70,6 +71,10 @@ export const postgresCatalogSearch: CatalogSearch = {
     if (sort === "price_asc") {
       order = Prisma.sql`p."minPrice" ASC, p."id" ASC`
       if (cursor) where.push(Prisma.sql`(p."minPrice", p."id") > (${cursor.value}::int, ${cursor.id})`)
+    } else if (sort === "rating") {
+      // Unrated products last; ties broken by id so the cursor is stable.
+      order = Prisma.sql`COALESCE(p."ratingAvg", 0) DESC, p."id" DESC`
+      if (cursor) where.push(Prisma.sql`(COALESCE(p."ratingAvg", 0), p."id") < (${cursor.value}::float8, ${cursor.id})`)
     } else if (sort === "price_desc") {
       order = Prisma.sql`p."minPrice" DESC, p."id" DESC`
       if (cursor) where.push(Prisma.sql`(p."minPrice", p."id") < (${cursor.value}::int, ${cursor.id})`)
@@ -78,8 +83,8 @@ export const postgresCatalogSearch: CatalogSearch = {
       if (cursor) where.push(Prisma.sql`(p."publishedAt", p."id") < (${cursor.value}::timestamp, ${cursor.id})`)
     }
 
-    const rows = await prisma.$queryRaw<{ id: string; minPrice: number; publishedAt: Date | null }[]>`
-      SELECT p."id", p."minPrice", p."publishedAt" ${from}
+    const rows = await prisma.$queryRaw<{ id: string; minPrice: number; publishedAt: Date | null; ratingAvg: number | null }[]>`
+      SELECT p."id", p."minPrice", p."publishedAt", p."ratingAvg" ${from}
       WHERE ${Prisma.join(where, " AND ")}
       ORDER BY ${order}
       LIMIT ${limit + 1}`
@@ -87,7 +92,7 @@ export const postgresCatalogSearch: CatalogSearch = {
     const last = page.at(-1)
     const nextCursor =
       rows.length > limit && last
-        ? encodeCursor(sort, sort === "newest" ? (last.publishedAt ?? new Date(0)).toISOString() : last.minPrice, last.id)
+        ? encodeCursor(sort, sort === "newest" ? (last.publishedAt ?? new Date(0)).toISOString() : sort === "rating" ? (last.ratingAvg ?? 0) : last.minPrice, last.id)
         : null
     return { ids: page.map((r) => r.id), nextCursor, nextPage: null }
   },

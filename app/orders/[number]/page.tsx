@@ -13,6 +13,7 @@ import { buyerCanCancel, isShipOverdue, reasonLabel, reportableReasons, statusLa
 import { catchUpFulfilment } from "@/lib/fulfilment/service"
 import type { Prisma } from "@/lib/generated/prisma/client"
 import { getPlatformSettings } from "@/lib/platform-settings"
+import { reviewableItems } from "@/lib/reviews/service"
 import { prisma } from "@/lib/prisma"
 import { regionLabel } from "@/lib/validation/common"
 
@@ -21,8 +22,8 @@ import { BuyerCancelForm, CancelOrderForm, ConfirmDeliveryForm, PayButton, Reser
 
 export const metadata: Metadata = { title: "Order", robots: { index: false } }
 
-export default async function OrderPage({ params, searchParams }: { params: Promise<{ number: string }>; searchParams: Promise<{ placed?: string; cancelled?: string; payment?: string; confirmed?: string; reported?: string; partCancelled?: string }> }) {
-  const [{ number }, { placed, cancelled, payment, confirmed, reported, partCancelled }] = await Promise.all([params, searchParams])
+export default async function OrderPage({ params, searchParams }: { params: Promise<{ number: string }>; searchParams: Promise<{ placed?: string; cancelled?: string; payment?: string; confirmed?: string; reported?: string; partCancelled?: string; reviewed?: string }> }) {
+  const [{ number }, { placed, cancelled, payment, confirmed, reported, partCancelled, reviewed }] = await Promise.all([params, searchParams])
   const user = await requireUser(`/orders/${number}`)
   await releaseExpiredReservations()
   await catchUpFulfilment()
@@ -46,6 +47,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const awaiting = order.status === "awaiting_payment"
   const settings = await getPlatformSettings()
   const now = new Date()
+  const reviewable = new Set((await reviewableItems(user.id, order.number)).map((i) => i.id))
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
@@ -82,6 +84,11 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
         </p>
       ) : null}
 
+      {reviewed ? (
+        <p role="status" className="mt-4 flex gap-2 rounded-md border border-emerald-600/30 bg-emerald-50 p-3 text-sm text-emerald-800">
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden /> Thanks for your review! It&apos;s now on the product page.
+        </p>
+      ) : null}
       {confirmed ? (
         <p role="status" className="mt-4 flex gap-2 rounded-md border border-emerald-600/30 bg-emerald-50 p-3 text-sm text-emerald-800">
           <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden /> Thanks for confirming! Enjoy your purchase.
@@ -138,7 +145,14 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                       {item.quantity} × {item.title}
                       {item.optionValues.length ? <span className="text-muted-foreground"> · {item.optionValues.join(" / ")}</span> : null}
                     </span>
-                    <span className="tabular-nums">{formatGhs(item.lineTotal)}</span>
+                    <span className="flex items-center gap-3">
+                      {reviewable.has(item.id) ? (
+                        <Link href={`/orders/${order.number}/review?item=${item.id}`} className="text-xs font-medium text-primary hover:underline">
+                          Write a review
+                        </Link>
+                      ) : null}
+                      <span className="tabular-nums">{formatGhs(item.lineTotal)}</span>
+                    </span>
                   </li>
                 ))}
                 <li className="flex justify-between gap-3 bg-muted/40 px-4 py-2.5">

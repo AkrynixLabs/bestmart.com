@@ -33,6 +33,7 @@ export default async function SearchPage({ searchParams }: Props) {
           text: filters.text,
           minPrice: filters.minPrice,
           maxPrice: filters.maxPrice,
+          minRating: filters.minRating,
           sort: filters.sort,
           after: filters.after,
           page: filters.page,

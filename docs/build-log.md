@@ -223,3 +223,16 @@ Also added an npm `overrides` entry so `@vercel/cli-config`'s nested `zod` uses 
 
 **Verified:** `next build` with `.env` moved aside and an empty environment (`env -i`) succeeds (47 static pages generated); with `.env`: `npm run check` (122/122), `next build`, Playwright 60/60.
 
+## 2026-11-16: Phase 7a, reviews and wishlist
+
+**Decided with the user (Phase 7):** verified-purchase reviews; platform and seller coupons; promoted listings at a flat daily fee from earnings; messages with contact details masked until a paid order. Built in four parts (7a–7d).
+
+**Built**
+- **Data model** (migration `reviews_and_wishlist`): `Review` (unique per order item, rating 1–5 CHECK, hidden ⇔ reason CHECK), `WishlistItem` (user + product key), `Product.ratingAvg` / `ratingCount` (range CHECK).
+- **Reviews:** only for order lines whose part is delivered or completed, once; optional comment and one photo (public store, resized in the browser); the product's average (one decimal) and count are recomputed in the same transaction as every create/hide/restore. Seller reply once (conditional update). Admin hide (reason, audit-logged) and restore. Names shown as first name + initial.
+- **Storefront:** stars on product cards; rating summary, star distribution and the review list on product pages; `aggregateRating` in Product JSON-LD; "Customer rating" filter and "Top rated" sort on category, store and search pages.
+- **Wishlist:** Save/Saved toggle on product pages (signed-out visitors go to sign-in and come back), `/saved` lists products that are still available.
+
+**Verified**
+- Vitest: 6 new (rating validation, averages, distribution, display names, rating filter parsing, decimal rating cursors). `next build` clean; migration zero drift.
+- Playwright reviews suite (desktop): no review link before delivery; after delivery a review needs a star rating, then posts with comment and photo; the link disappears; the product shows "4.0 (1 review)", the text, the photo and `aggregateRating`; it appears under "4 stars and up" sorted by rating; the seller's reply shows publicly; hiding removes the rating and restoring brings it back; the save toggle and `/saved` work, and signed-out visitors are sent to sign in.

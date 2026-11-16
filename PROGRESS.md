@@ -17,7 +17,7 @@ The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working
 - [x] Seller application (store name, Ghana Card, phone, payout account; document upload to private Blob) → admin approval
 - [x] Rate limiting (Upstash) on auth and sensitive actions; audit log table
 
-## Phase 2 — Catalog ✅ (built 2026-11-06; rating filter waits for reviews in Phase 7)
+## Phase 2 — Catalog ✅ (built 2026-11-06; rating filter added with reviews in Phase 7)
 - [x] Category tree in the database (admin-managed, 3 levels, attributes, seller suggestions), launch categories seeded
 - [x] Products with variants (SKU, price in pesewas, compare-at price, stock), image upload
 - [x] Product detail, category and seller store pages, server-rendered, with SEO metadata, JSON-LD and sitemap
@@ -49,8 +49,8 @@ The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working
 - [x] People: suspend/reinstate accounts and stores, ops admin roles; two-factor sign-in required for admins
 
 ## Phase 7 — Engagement
-- [ ] Verified-purchase reviews and ratings
-- [ ] Wishlist
+- [x] Verified-purchase reviews and ratings (built 2026-11-16; rating filter and sort on the storefront)
+- [x] Wishlist (built 2026-11-16)
 - [ ] Buyer ↔ seller messaging (tied to a product or order)
 - [ ] Coupons (platform-wide and seller-scoped)
 - [ ] Seller ads / promoted listings (the "Advertise" in the tagline)
@@ -77,3 +77,4 @@ The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working
 - **2026-11-11** — Phase 5 done: sellers accept and ship orders (saying who delivers), buyers confirm delivery or it confirms itself after 7 days, and the seller's money becomes available 3 days later. Buyers can cancel late shipments for a refund or report problems with photos; admins resolve them. Next: weekly payouts to sellers.
 - **2026-11-13** — Payouts done: every Monday a payout batch is drafted for sellers with at least GH₵50 available; the Super Admin approves it and the money goes to their MoMo or bank account (failed transfers return to the seller's balance). The money flow is complete end to end. Next: Phase 6, the admin area (settings, reports).
 - **2026-11-15** — Phase 6 done: admins sign in with a second step (authenticator app) and recovery codes; the Super Admin edits every business rule from one page, manages people and admin roles, reads money reports (with a CSV for the accountant) and the audit log. Next: Phase 7, reviews, wishlist, messaging and coupons.
+- **2026-11-16** — Phase 7a: buyers who received an item can review it (stars, comment, photo); products show ratings and can be filtered and sorted by them; sellers reply once and admins can hide abuse. Shoppers can save products to a list. Next: messaging, coupons and promoted listings.

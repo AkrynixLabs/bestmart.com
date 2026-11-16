@@ -2,6 +2,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { ImageOff } from "lucide-react"
 
+import { Stars } from "@/components/reviews/stars"
 import type { ProductCard as Card } from "@/lib/catalog/products"
 import { formatGhs } from "@/lib/money"
 
@@ -36,6 +37,11 @@ export function ProductCard({ product, priority = false }: { product: Card; prio
           </span>
           {onSale ? <span className="ml-2 text-xs text-muted-foreground line-through">{formatGhs(product.compareAtPrice!)}</span> : null}
         </p>
+        {product.ratingCount > 0 && product.ratingAvg !== null ? (
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Stars rating={product.ratingAvg} /> ({product.ratingCount})
+          </p>
+        ) : null}
         <p className="truncate text-xs text-muted-foreground">{product.store.name}</p>
       </div>
     </Link>

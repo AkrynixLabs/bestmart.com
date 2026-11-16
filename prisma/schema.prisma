@@ -95,6 +95,8 @@ model User {
   addresses            Address[]
   cart                 Cart?
   orders               Order[]
+  reviews              Review[]
+  wishlist             WishlistItem[]
   refundsIssued        Refund[]
   disputesOpened       Dispute[]            @relation("disputeOpener")
   disputesResolved     Dispute[]            @relation("disputeResolver")
@@ -294,6 +296,7 @@ model Store {
   subOrders           SubOrder[]
   ledgerEntries       LedgerEntry[]
   payouts             Payout[]
+  reviews             Review[]
 
   @@map("stores")
 }
@@ -445,6 +448,9 @@ model Product {
   minPrice      Int                      @default(0)
   maxPrice      Int                      @default(0)
   totalStock    Int                      @default(0)
+  // Kept in sync from visible reviews (lib/reviews/service.ts).
+  ratingAvg     Float?
+  ratingCount   Int                      @default(0)
   // Maintained by a database trigger (title weighted above description).
   searchVector  Unsupported("tsvector")?
   createdAt     DateTime                 @default(now())
@@ -457,6 +463,8 @@ model Product {
   images          ProductImage[]
   attributeValues ProductAttributeValue[]
   orderItems      OrderItem[]
+  reviews         Review[]
+  wishlistedBy    WishlistItem[]
 
   @@index([storeId, status, updatedAt])
   @@index([categoryId, status, publishedAt])
@@ -695,6 +703,7 @@ model OrderItem {
   subOrder SubOrder        @relation(fields: [subOrderId], references: [id], onDelete: Cascade)
   product  Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
   variant  ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  review   Review?
 
   @@index([subOrderId])
   @@index([variantId])
@@ -1015,6 +1024,57 @@ model Payout {
   @@index([storeId, createdAt])
   @@index([status])
   @@map("payouts")
+}
+
+// ---------------------------------------------------------------------------
+// Reviews and wishlist
+// ---------------------------------------------------------------------------
+
+enum ReviewStatus {
+  visible
+  hidden // by an admin
+}
+
+// A verified-purchase review: one per order line, only once that part of
+// the order was delivered.
+model Review {
+  id              String       @id @default(cuid())
+  orderItemId     String       @unique
+  productId       String
+  storeId         String
+  userId          String
+  rating          Int // 1-5
+  body            String?
+  photoUrl        String?
+  photoKey        String?
+  status          ReviewStatus @default(visible)
+  hiddenReason    String?
+  sellerReply     String?
+  sellerRepliedAt DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store     Store     @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([productId, status, createdAt])
+  @@index([storeId, createdAt])
+  @@map("reviews")
+}
+
+model WishlistItem {
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([userId, productId])
+  @@index([userId, createdAt])
+  @@map("wishlist_items")
 }
 
 // ---------------------------------------------------------------------------

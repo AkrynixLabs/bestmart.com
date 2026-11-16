@@ -10,7 +10,7 @@ import { authConfig } from "./auth.config"
 const { auth } = NextAuth(authConfig)
 
 const ADMIN_PATH_HEADER = "x-bm-admin-path" // read in app/admin/layout.tsx
-const SIGNED_IN_ONLY = ["/account", "/seller", "/admin", "/sell/apply", "/checkout", "/orders"]
+const SIGNED_IN_ONLY = ["/account", "/seller", "/admin", "/sell/apply", "/checkout", "/orders", "/saved"]
 const GUEST_ONLY = ["/login", "/signup"]
 
 export default auth((req) => {
@@ -42,5 +42,5 @@ export default auth((req) => {
 })
 
 export const config = {
-  matcher: ["/account/:path*", "/seller/:path*", "/admin/:path*", "/sell/apply", "/checkout", "/orders/:path*", "/login", "/signup"],
+  matcher: ["/account/:path*", "/seller/:path*", "/admin/:path*", "/sell/apply", "/checkout", "/orders/:path*", "/saved", "/login", "/signup"],
 }
