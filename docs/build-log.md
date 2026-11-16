@@ -215,3 +215,11 @@ Also added an npm `overrides` entry so `@vercel/cli-config`'s nested `zod` uses 
 
 **Verified:** a script running 8 merges of the same guest cart at once: no errors, one account cart, quantity unchanged (2), guest cart removed. `npm run check`, `next build` and the full Playwright suite (see the commit's verification).
 
+## 2026-11-16: Build without environment variables
+
+**Problem:** after the push, the Vercel build failed while collecting page data for `/admin/reports/export`: `Invalid environment configuration` (no `DATABASE_URL`/`AUTH_SECRET` on the Vercel project yet). `lib/prisma.ts` created the database client when the module was imported, and Next imports route modules at build time; `/cart` also touched the database before reading cookies, so Next tried to pre-render it.
+
+**Fixed:** the Prisma client is now a lazy proxy, created on first use; `/cart` calls `connection()` so it's always rendered per request. The build no longer needs any environment variable; the app still refuses to run without them (validated on first use).
+
+**Verified:** `next build` with `.env` moved aside and an empty environment (`env -i`) succeeds (47 static pages generated); with `.env`: `npm run check` (122/122), `next build`, Playwright 60/60.
+

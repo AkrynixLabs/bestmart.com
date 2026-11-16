@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
+import { connection } from "next/server"
 import { ImageOff, ShoppingCart } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -14,6 +15,7 @@ import { CartQuantity } from "./cart-quantity"
 export const metadata: Metadata = { title: "Your cart", robots: { index: false } }
 
 export default async function CartPage() {
+  await connection() // per visitor: never pre-rendered
   await releaseExpiredReservations()
   const cart = await getCartView()
 
