@@ -134,6 +134,10 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
                   <Link href={`/s/${sub.store.slug}`} className="font-semibold hover:underline">
                     {sub.store.name}
                   </Link>
+                  {" · "}
+                  <Link href={`/messages/new?store=${sub.store.slug}&order=${order.number}`} className="text-primary hover:underline">
+                    Message seller
+                  </Link>
                 </p>
                 {!awaiting && order.status !== "expired" && order.status !== "cancelled" ? <Badge variant="outline">{statusLabel[sub.status]}</Badge> : null}
               </div>

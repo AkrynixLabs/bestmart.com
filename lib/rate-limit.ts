@@ -17,6 +17,7 @@ const RULES = {
   "category-suggestion": { limit: 10, window: "1 d" },
   "product-image": { limit: 200, window: "1 h" },
   "two-factor": { limit: 10, window: "15 m" },
+  message: { limit: 60, window: "1 h" },
 } as const satisfies Record<string, { limit: number; window: Window }>
 
 export type RateLimitName = keyof typeof RULES

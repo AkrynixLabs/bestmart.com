@@ -108,6 +108,8 @@ model User {
   auditLogs            AuditLog[]
   reviewedSuggestions  CategorySuggestion[]
   blockedProducts      Product[]            @relation("productBlocker")
+  conversations        Conversation[]
+  messagesSent         Message[]
 
   @@map("users")
 }
@@ -297,6 +299,7 @@ model Store {
   ledgerEntries       LedgerEntry[]
   payouts             Payout[]
   reviews             Review[]
+  conversations       Conversation[]
 
   @@map("stores")
 }
@@ -465,6 +468,7 @@ model Product {
   orderItems      OrderItem[]
   reviews         Review[]
   wishlistedBy    WishlistItem[]
+  messages        Message[]
 
   @@index([storeId, status, updatedAt])
   @@index([categoryId, status, publishedAt])
@@ -634,6 +638,7 @@ model Order {
   subOrders SubOrder[]
   payments  Payment[]
   refunds   Refund[]
+  messages  Message[]
 
   @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])
@@ -1075,6 +1080,57 @@ model WishlistItem {
   @@id([userId, productId])
   @@index([userId, createdAt])
   @@map("wishlist_items")
+}
+
+// ---------------------------------------------------------------------------
+// Buyer–seller messages
+// ---------------------------------------------------------------------------
+
+enum MessageSender {
+  buyer
+  seller
+}
+
+// One thread per buyer and store. Bodies are stored as written; contact
+// details are masked when shown (lib/messages/) until the buyer has a paid
+// order with the store, so admins can still read the original in a dispute.
+model Conversation {
+  id            String    @id @default(cuid())
+  storeId       String
+  buyerId       String
+  lastMessageAt DateTime  @default(now())
+  buyerReadAt   DateTime?
+  sellerReadAt  DateTime?
+  createdAt     DateTime  @default(now())
+
+  store    Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  buyer    User      @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@unique([storeId, buyerId])
+  @@index([buyerId, lastMessageAt])
+  @@index([storeId, lastMessageAt])
+  @@map("conversations")
+}
+
+model Message {
+  id             String        @id @default(cuid())
+  conversationId String
+  senderId       String
+  sender         MessageSender
+  body           String
+  // Optional context: the product or order the message is about.
+  productId      String?
+  orderId        String?
+  createdAt      DateTime      @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author       User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  product      Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  order        Order?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
 }
 
 // ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ const links = [
   { href: "/seller/products", label: "Products" },
   { href: "/seller/earnings", label: "Earnings" },
   { href: "/seller/reviews", label: "Reviews" },
+  { href: "/seller/messages", label: "Messages" },
   { href: "/seller/settings", label: "Pickup location" },
   { href: "/seller/categories", label: "Suggest a category" },
 ]

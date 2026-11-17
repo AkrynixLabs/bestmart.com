@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { BadgeCheck, Eye, ShieldCheck } from "lucide-react"
+import { BadgeCheck, Eye, MessageSquare, ShieldCheck } from "lucide-react"
 
 import { Breadcrumbs } from "@/components/catalog/breadcrumbs"
 import { JsonLd } from "@/components/catalog/json-ld"
@@ -112,7 +112,14 @@ export default async function ProductPage({ params }: Props) {
             <p className="text-sm text-muted-foreground">Not available right now.</p>
           )}
 
-          {!preview ? <SaveButton productId={product.id} initiallySaved={saved > 0} signedIn={Boolean(user)} returnTo={`/p/${product.slug}`} /> : null}
+          {!preview ? (
+            <div className="flex flex-wrap gap-2">
+              <SaveButton productId={product.id} initiallySaved={saved > 0} signedIn={Boolean(user)} returnTo={`/p/${product.slug}`} />
+              <Link href={`/messages/new?store=${product.store.slug}&product=${product.slug}`} className="inline-flex h-11 items-center gap-2 rounded-md border px-4 text-sm font-medium hover:bg-muted">
+                <MessageSquare className="size-4" aria-hidden /> Message the seller
+              </Link>
+            </div>
+          ) : null}
 
           <ul className="grid gap-3 rounded-xl bg-muted/60 p-4 text-sm">
             <li className="flex gap-3">

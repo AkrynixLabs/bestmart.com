@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 import { notFound } from "next/navigation"
 import { BadgeCheck, MapPin } from "lucide-react"
 
@@ -53,7 +54,12 @@ export default async function StorePage({ params, searchParams }: Props) {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <header className="rounded-2xl bg-brand-navy p-6 text-white sm:p-8">
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{store.name}</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{store.name}</h1>
+          <Link href={`/messages/new?store=${store.slug}`} className="inline-flex h-10 items-center rounded-md bg-white/10 px-4 text-sm font-medium hover:bg-white/20">
+            Message the seller
+          </Link>
+        </div>
         <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/80">
           <span className="inline-flex items-center gap-1">
             <BadgeCheck className="size-4 text-brand-orange-light" aria-hidden /> Verified seller

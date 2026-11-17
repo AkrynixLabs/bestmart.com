@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { SessionProvider, signOut, useSession } from "next-auth/react"
-import { ChevronDown, LogOut, MapPin, ShieldCheck, Store, User, Package, Heart } from "lucide-react"
+import { ChevronDown, LogOut, MapPin, ShieldCheck, Store, User, Package, Heart, MessageSquare } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -69,6 +69,11 @@ function UserMenuInner() {
         <DropdownMenuItem asChild>
           <Link href="/orders">
             <Package aria-hidden /> Orders
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/messages">
+            <MessageSquare aria-hidden /> Messages
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

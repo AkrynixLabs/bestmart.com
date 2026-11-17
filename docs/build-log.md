@@ -236,3 +236,16 @@ Also added an npm `overrides` entry so `@vercel/cli-config`'s nested `zod` uses 
 **Verified**
 - Vitest: 6 new (rating validation, averages, distribution, display names, rating filter parsing, decimal rating cursors). `next build` clean; migration zero drift.
 - Playwright reviews suite (desktop): no review link before delivery; after delivery a review needs a star rating, then posts with comment and photo; the link disappears; the product shows "4.0 (1 review)", the text, the photo and `aggregateRating`; it appears under "4 stars and up" sorted by rating; the seller's reply shows publicly; hiding removes the rating and restoring brings it back; the save toggle and `/saved` work, and signed-out visitors are sent to sign in.
+
+## 2026-11-17: Phase 7b, buyer–seller messaging
+
+**Built**
+- **Data model** (migration `messages`): `Conversation` (unique per store + buyer, `lastMessageAt`, buyer/seller read markers), `Message` (sender side, body 1–2000 chars CHECK, optional product and order context).
+- **Masking** (`lib/messages/mask.ts`, pure): phone numbers (9+ digits in any common format), emails (including "at … dot" spellings), links, bare domains and wa.me/t.me handles become "[contact hidden]". Applied when messages are shown, in both directions, until the buyer has a paid order with that store; the stored text is unchanged (for admins and for after payment).
+- **Service** (`lib/messages/service.ts`): context kept only when the product belongs to the store and the order to the buyer; a store owner can't message their own store; the recipient gets one email per burst (only when they had nothing unread), through the outbox; rate limit 60 messages per hour.
+- **Pages:** buyer inbox and threads, a compose page reached from "Message the seller" (product, store, order pages), seller inbox and threads; unread markers; links in the account menu and seller navigation.
+
+**Verified**
+- Vitest: 3 new (phone formats, emails/links/handles, ordinary messages untouched). `next build` clean; migration zero drift.
+- Playwright messages suite (desktop): an empty message is refused; a product question shows its context, the phone number is hidden for both sides and the safety notice shows; the seller is emailed, sees "New", replies, and their email is hidden; the box clears after sending; after the shopper pays for an order both details show and the notice disappears; another signed-in user gets 404 on the thread as buyer and as seller.
+

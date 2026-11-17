@@ -51,7 +51,7 @@ The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working
 ## Phase 7 — Engagement
 - [x] Verified-purchase reviews and ratings (built 2026-11-16; rating filter and sort on the storefront)
 - [x] Wishlist (built 2026-11-16)
-- [ ] Buyer ↔ seller messaging (tied to a product or order)
+- [x] Buyer ↔ seller messaging, tied to a product or order (built 2026-11-17; contact details hidden until a paid order)
 - [ ] Coupons (platform-wide and seller-scoped)
 - [ ] Seller ads / promoted listings (the "Advertise" in the tagline)
 
@@ -78,3 +78,4 @@ The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working
 - **2026-11-13** — Payouts done: every Monday a payout batch is drafted for sellers with at least GH₵50 available; the Super Admin approves it and the money goes to their MoMo or bank account (failed transfers return to the seller's balance). The money flow is complete end to end. Next: Phase 6, the admin area (settings, reports).
 - **2026-11-15** — Phase 6 done: admins sign in with a second step (authenticator app) and recovery codes; the Super Admin edits every business rule from one page, manages people and admin roles, reads money reports (with a CSV for the accountant) and the audit log. Next: Phase 7, reviews, wishlist, messaging and coupons.
 - **2026-11-16** — Phase 7a: buyers who received an item can review it (stars, comment, photo); products show ratings and can be filtered and sorted by them; sellers reply once and admins can hide abuse. Shoppers can save products to a list. Next: messaging, coupons and promoted listings.
+- **2026-11-17** — Phase 7b: shoppers can message sellers from a product, store or order; phone numbers, emails and links stay hidden on both sides until the shopper has paid for an order from that store. Next: coupons and promoted listings.

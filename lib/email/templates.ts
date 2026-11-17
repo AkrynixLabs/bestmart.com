@@ -187,3 +187,10 @@ export function payoutFailedMessage(name: string, storeName: string, amount: num
   const action = { label: "View earnings", url: `${appUrl()}/seller/earnings` }
   return { subject: `Payout not sent: ${ghs(amount)}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
 }
+
+export function newMessageMessage(name: string, from: string, url: string) {
+  const title = `New message from ${from}`
+  const lines = [`Hi ${name},`, `${from} sent you a message on ${site.name}.`, "For your safety, keep conversations and payments on BestMart."]
+  const action = { label: "Read and reply", url }
+  return { subject: `New message from ${from}`, html: layout(title, lines.map(escapeHtml), action), text: text(title, lines, action) }
+}
