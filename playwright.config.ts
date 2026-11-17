@@ -8,6 +8,9 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
+  // Password hashing (bcryptjs, pure JS) blocks the server briefly; with
+  // several workers signing up at once, 5 s can be too tight.
+  expect: { timeout: 10_000 },
   use: {
     baseURL: `http://localhost:${port}`,
     trace: "on-first-retry",
