@@ -24,13 +24,13 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@node-rs/bcrypt": "^1.10.9",
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "@sentry/nextjs": "^11.14.0",
     "@upstash/ratelimit": "^2.2.1",
     "@upstash/redis": "^1.41.0",
     "@vercel/blob": "^2.9.0",
-    "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.74.0",
@@ -67,5 +67,10 @@
     "@prisma/engines@7.10.1": true,
     "esbuild@0.28.2": true,
     "prisma@7.10.1": true
+  },
+  "overrides": {
+    "@vercel/cli-config": {
+      "zod": "$zod"
+    }
   }
 }

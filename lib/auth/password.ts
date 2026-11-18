@@ -1,14 +1,17 @@
 import "server-only"
-import bcrypt from "bcryptjs"
+import { hash, verify } from "@node-rs/bcrypt"
 
+// Native bcrypt (Rust, via N-API): hashing runs on a libuv worker thread, so
+// a sign-in doesn't block every other request the way pure-JS bcrypt does.
+// Same hash format as bcryptjs ($2a$/$2b$), so existing hashes still verify.
 const COST = 12
 
 export function hashPassword(plain: string): Promise<string> {
-  return bcrypt.hash(plain, COST)
+  return hash(plain, COST)
 }
 
-export function verifyPassword(plain: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(plain, hash)
+export function verifyPassword(plain: string, stored: string): Promise<boolean> {
+  return verify(plain, stored)
 }
 
 // Compared against when no account exists, so a failed login takes the same
@@ -17,6 +20,6 @@ export function verifyPassword(plain: string, hash: string): Promise<boolean> {
 let dummyHash: Promise<string> | undefined
 
 export async function burnPasswordCheck(plain: string): Promise<void> {
-  dummyHash ??= bcrypt.hash("bestmart-timing-equaliser", COST)
-  await bcrypt.compare(plain, await dummyHash)
+  dummyHash ??= hash("bestmart-timing-equaliser", COST)
+  await verify(plain, await dummyHash)
 }
