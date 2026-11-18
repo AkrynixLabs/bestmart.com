@@ -45,3 +45,30 @@ What was built in each session and how it was verified. Newest at the bottom.
 - Google sign-in (no OAuth client yet), real Resend delivery, Vercel Blob and Upstash (no accounts yet); the local fallbacks were exercised instead.
 - The rejection flow, address editing/deleting and change-password have no e2e test yet; they were checked by reading the code and types only.
 - Terms and Privacy are drafts pending a lawyer and a registered company name.
+
+## 2026-11-04 to 2026-11-18: Phase 2, catalog
+
+**Decided with the user:** categories are admin-managed data (up to 3 levels), with admin-defined attributes per category inherited by subcategories; only admins create categories, sellers can suggest them. Launch roots: Electronics, Fashion, Beauty, Home & Living, Sports (Groceries deferred).
+
+**Built**
+- **Data model** (migration `catalog`): `Category` (tree with `path`/`depth`, status, commission override, SEO), `CategorySlugRedirect`, `CategoryAttribute`, `CategorySuggestion`, `Product` (options JSON, status, moderation fields, denormalised price range and stock, trigger-maintained `searchVector`), `ProductVariant`, `ProductImage`, `ProductAttributeValue`; `PlatformSettings.lowStockThreshold`. Hand-written SQL: `pg_trgm`, CHECK constraints (prices > 0, stock ≥ 0, was-price > price, slug and key formats, tree shape), one pending suggestion per store and name, the search trigger, and the five launch categories.
+- **Category tree:** pure helpers in `lib/catalog/tree.ts` (ancestry, subtrees, visibility, inherited attributes and commission, move/depth/cycle checks, attribute-key conflicts); one cached query (`unstable_cache`, tag `categories`) invalidated by `updateTag` from every admin action.
+- **Admin:** `/admin/categories` (tree with product/attribute counts; create, edit, move with subtree re-pathing, hide, delete only when empty, slug changes keep a redirect, commission editable by the Super Admin only), attributes (type locked once used, in-use choices can't be removed), `/admin/category-suggestions` (accept creates the category; seller emailed either way), `/admin/products` (block/unblock with reason; seller emailed). All audit-logged.
+- **Seller:** dashboard with counts and low-stock list; `/seller/products` (tabs, search); product editor with photos (resized in the browser to 1600 px JPEG, up to 8, reorder, delete), details and attribute inputs, options/variants editor (up to 3 options, 100 variants, regenerate keeps existing rows, two-pass save so SKUs can swap), category change, publish checklist; `/seller/categories` suggestions.
+- **Storefront:** `/c/[slug]` (subcategory chips, filters for price and filterable attributes as a GET form, old slugs 301), `/p/[slug]` (gallery, variant picker with per-combination price/stock, specs, Product + Breadcrumb JSON-LD; owner/admin preview with noindex, 404 for everyone else), `/s/[slug]`, `/search` (products + matching sellers), live header search, home page categories and new arrivals from the database. Filtered/paged views are `noindex, follow` with canonical URLs.
+- **Search:** `lib/search/` interface with a Postgres implementation (`websearch_to_tsquery` + `word_similarity`), keyset cursors for browse sorts, capped pages for relevance.
+- **Sitemap:** `/sitemap.xml` index plus `/sitemaps/pages.xml` and `/sitemaps/products-N.xml` (10,000 per file), built on request.
+- **Uploads:** shared magic-byte checks (`lib/validation/files.ts`); public Blob store (`PUBLIC_BLOB_READ_WRITE_TOKEN`) or `.data/public` served at `/media/*` locally; Server Action body limit 4.5 MB.
+- **Phase 1 fix:** Ghana Card uploads over 1 MB failed (Next's default Server Action limit). Photos are now shrunk in the browser; limit 4 MB.
+
+**Verified**
+- `npm run check`: ESLint, tsc, Vitest 78/78. `next build` clean (no whole-project tracing warning).
+- Migration chain applied to a scratch database with zero Prisma drift, then to the local database.
+- Playwright 26/26, two consecutive cold runs: the full catalog journey on desktop (admin creates a subcategory and required attribute → visible on the storefront immediately → seller lists a product, uploads a 2400 px photo that arrives as a 1600 px JPEG, fills the attribute, adds 2 storage variants, publishes → shopper finds it by category, parent category, attribute filter and typo-tolerant search, switches variant price/stock → seller suggestion accepted and emailed → category slug change redirects with query → admin blocks: product 404s for shoppers, seller sees the reason and gets an email → sitemaps list the categories), plus a phone-width overflow check of catalog pages.
+- Screenshots of home, category, product and search pages reviewed at 1366 px and Pixel 7.
+
+**Not verified / notes**
+- Real Vercel Blob uploads (no account); the local store was exercised.
+- Not covered by e2e yet: deleting/moving categories with subcategories, deleting attributes with values, archive/restore, photo reordering and deletion, unblock.
+- The first e2e run after a server start was flaky until the expect timeout went to 10 s: `bcryptjs` hashing blocks the event loop. A native bcrypt is an open decision.
+- Rating filter and sort wait for reviews (Phase 7). Store name search uses `ILIKE` (fine at current scale).

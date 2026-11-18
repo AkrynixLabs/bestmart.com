@@ -24,6 +24,15 @@ BestMart is a Ghana-focused multi-vendor marketplace (shoppers buy from many ind
 | Returns | 7 days after delivery for defective / not-as-described items *(default)*; change-of-mind returns are at the seller's discretion. |
 | Payment methods | Paystack only (MoMo + card) at launch. No cash on delivery in v1. |
 
+## Catalog (decided 2026-11-03)
+
+- **Categories are data, not code.** Admins create, rename, nest, re-order and hide them at `/admin/categories`; storefront, menus, filters and sitemap read the database (tree cached under the `categories` tag, invalidated on every admin edit). Up to **3 levels** (UI cap; the schema allows more). Launch roots: Electronics, Fashion, Beauty, Home & Living, Sports (Groceries deferred).
+- **Stable URLs:** products at `/p/<slug>` (category not in the URL, slug never changes), categories at `/c/<slug>` with old slugs redirecting after a rename, stores at `/s/<slug>`. A category with products can be hidden, not deleted.
+- **Admin-defined attributes per category** (text, number, pick-list, multi-pick, yes/no; required and filterable flags), inherited by subcategories. Sellers fill them in; shoppers filter by them.
+- **Only admins add categories; sellers can suggest one** from their dashboard, reviewed in an admin queue.
+- **Products:** sellers publish directly, admins can block (moderate-after). Up to 3 option types (e.g. Size, Colour) and 100 variants, each with SKU, price, optional compare-at price and stock. Up to 8 photos, resized in the browser before upload *(defaults)*. Low-stock warning at 5 units *(default, platform setting)*.
+- **Search** sits behind `lib/search/` (Postgres full-text + trigram now) so a search engine can replace it without touching pages.
+
 ## Roles (planned)
 
 | Role | Does |
@@ -45,14 +54,15 @@ Role and ownership checks are server-side on every page, action and route, never
 - **Mobile:** Flutter app in `bestmart_mobile/` (buyer-first), talking to `app/api/mobile/**`. Built after the web app's core is done.
 - **Hosting:** Vercel.
 
-## Current state (2026-11-02)
+## Current state (2026-11-18)
 
 - Working branch: `rebuild/nextjs`. `main` still has the old React + Vite + Express + Supabase app (no live data); this branch has replaced it, and the old code stays in git history.
 - **Phase 0 (foundation) built**: Next.js 16.4 shell (home, 404, error pages, robots, sitemap), Prisma 7 with `@prisma/adapter-pg` (works with local Docker Postgres and Neon alike, unlike TutorLane's Neon WebSocket adapter), `PlatformSettings` single-row model, env/logger/money helpers, Sentry 11 (off without DSN), security headers, health routes, Vitest + Playwright, CI. Details in `docs/build-log.md`.
 - **Phase 1 (accounts and identity) built**: Auth.js v5 (Credentials + optional Google, JWT, no adapter), email verification and reset tokens, profile and addresses, seller applications with a private Ghana Card upload, admin review at `/admin` that creates the `Store` and promotes to `seller`, rate limits, audit log. Without service keys, email/files go to `.data/` (git-ignored) and rate limits are in-memory. Details in `docs/build-log.md`.
+- **Phase 2 (catalog) built**: admin-managed category tree (`lib/catalog/tree.ts` pure helpers, `categories.ts` cached loader) with attributes, slug redirects and seller suggestions; seller product editor (photos, details + attributes, options/variants, publish checklist); admin moderation (block with reason); storefront `/c`, `/p`, `/s`, `/search` with filters, JSON-LD and a dynamic sitemap index. Search goes through `lib/search/` (Postgres FTS + pg_trgm, keyset cursors). Details in `docs/build-log.md`.
 - First admin: sign up, then `npx tsx scripts/set-role.ts <email> super_admin`.
-- Local database: Docker Postgres 17 on `127.0.0.1:5433` (`npm run db:up`), all migrations applied. Auto mode blocks Claude from running `prisma migrate deploy`; ask the user to run `npm run db:migrate` after adding a migration.
-- Not yet: CI run on GitHub (the user pushes; this machine has no GitHub credentials), Vercel deployment, Google sign-in tested.
+- Local database: Docker Postgres 17 on `127.0.0.1:5433` (`npm run db:up`), all migrations applied. `.claude/settings.local.json` (git-ignored) allows Claude to run `npm run db:migrate`; `prisma migrate reset` is denied.
+- Pushed to GitHub 2026-11-03 (the user pushes; this machine has no GitHub credentials). Not yet: CI result confirmed, Vercel deployment, Google sign-in tested.
 - `notes/` (git-ignored) holds the user's personal reference notes: strategy, business rules, their to-do list, tech decisions. Keep `notes/03-your-todo.md` current when open items change.
 
 ## Gotchas
@@ -65,6 +75,12 @@ Role and ownership checks are server-side on every page, action and route, never
 - Playwright reuses any server on port 3100: kill a stale `next-server` first. `E2E_TEST_MODE=1` (set by its webServer) forces the outbox, local storage and no rate limits on a production build; it's ignored when `VERCEL_ENV=production`.
 - Next.js renders a hidden `#__next-route-announcer__` with `role="alert"`; use `formMessage()` from `tests/e2e/helpers.ts` instead of `getByRole("alert")`.
 - Permission checks use `lib/auth/session.ts` (database re-read), never the JWT's role alone. Wrong-role pages call `notFound()`.
+- Never export non-action helpers from a `"use server"` file: every export becomes a callable endpoint. Shared server logic goes in `lib/` (e.g. `lib/catalog/category-admin.ts`).
+- Category/attribute changes must call `invalidateCategories()` (Server Actions only; it uses `updateTag`).
+- Generate migrations with `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script`, then check for unwanted `DROP`s. Prisma can't round-trip some index opclasses (e.g. `text_pattern_ops`), so declare indexes in the schema where possible and test new migrations on a scratch database (`bestmart_scratch`) for zero drift.
+- A form whose success removes it from the page (accepting a suggestion, blocking from a filtered list, or a keyed remount) loses its `useActionState` message: redirect with a status query param, or keep the state in a parent outside the key (see `variants-editor.tsx`).
+- `bcryptjs` blocks the event loop for ~0.3 s per hash; Playwright's expect timeout is 10 s because of it. A native/threaded bcrypt is an open decision.
+- Next 16 needs `images.qualities` and `localPatterns`; local photos are served by `app/media/[...key]/route.ts` (dev/e2e only). Server Action bodies are capped at 4.5 MB (`next.config.ts`); photos are resized in the browser first.
 
 ## Conventions
 
@@ -75,8 +91,8 @@ Role and ownership checks are server-side on every page, action and route, never
 
 ## Open items (need the user)
 
-- [ ] Delivery zone fee amounts (GHS) for the four zones.
-- [ ] Accounts: Neon, Paystack (needs a registered business for live keys), Resend + sending domain, Sentry, Upstash, Vercel project, Google OAuth client, domain name.
+- [ ] Delivery zone fee amounts (GHS) for the four zones (needed for Phase 3).
+- [ ] Swap `bcryptjs` for a native, off-main-thread bcrypt (e.g. `@node-rs/bcrypt`; existing hashes stay valid) before launch?
+- [ ] Accounts: Neon, Paystack (needs a registered business for live keys), Resend + sending domain, Sentry, Upstash, Vercel project with two Blob stores (private for KYC, public for photos), Google OAuth client, domain name.
 - [ ] **Regulatory check:** holding buyer funds before paying sellers may fall under Bank of Ghana payment-services rules. Confirm with Paystack / a lawyer before going live; the fallback is Paystack split-at-charge (TutorLane's model) with refunds clawed back from future payouts.
 - [ ] Legal entity name for terms, privacy policy, seller agreement and returns policy; Data Protection Commission registration.
-- [ ] Launch categories (the old app had Electronics, Fashion, Beauty, Groceries, Home & Living, Sports; groceries is hard to deliver well and may be worth deferring).

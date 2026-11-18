@@ -1,6 +1,6 @@
 # Security
 
-## In place (Phase 0-1)
+## In place (Phase 0-2)
 
 - **Security headers** on every response (`next.config.ts`): HSTS, `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`; `X-Powered-By` removed.
 - **Validated configuration** (`lib/env.ts`); secrets are server-only (`server-only` import guard). Only `NEXT_PUBLIC_*` values reach the browser.
@@ -14,7 +14,10 @@
 - **Sessions:** Auth.js JWT cookies, but every page, action and route re-reads role and status from the database, so suspensions and role changes apply immediately. `/admin` returns 404 to non-admins. Sign-in `callbackUrl` only accepts same-site paths.
 - **Rate limits** (Upstash, in-memory fallback in development): sign-in per IP and per email, sign-up, forgot-password, resend-verification, change-password, seller applications.
 - **Seller KYC:** Ghana Card images are type-checked by their content, not the file name (JPEG, PNG, WebP or PDF, max 5 MB), stored in a **private** Blob store under random keys, and served only through an admin-only route with `no-store` and a sandbox CSP; every view is audit-logged.
-- **Audit log** for role changes, application decisions and KYC document views.
+- **Audit log** for role changes, application decisions, KYC document views, category/attribute changes, suggestion decisions and product blocks.
+- **Catalog uploads:** product and category photos are checked by content (JPEG/PNG/WebP), stored under random keys in a separate public store, limited to 8 per product and rate-limited per store. Browser-side resizing also drops photo metadata such as GPS location.
+- **Catalog authorization:** every seller action loads the product by id *and* the seller's store, so one seller can never read or change another's products; suspended stores can't edit. Drafts, blocked products and hidden categories return 404 to shoppers; only the owner and admins get a `noindex` preview. Commission overrides are Super Admin only.
+- **Search input** is length-capped and passed as bound parameters (`Prisma.sql`), never concatenated into SQL. JSON-LD escapes `<`.
 - **Test mode guard:** `E2E_TEST_MODE=1` (local outbox, local storage, no rate limits) is ignored when `VERCEL_ENV=production`, and production without Resend/Blob keys refuses to start those features rather than silently falling back.
 
 ## Planned

@@ -17,12 +17,12 @@ The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working
 - [x] Seller application (store name, Ghana Card, phone, payout account; document upload to private Blob) → admin approval
 - [x] Rate limiting (Upstash) on auth and sensitive actions; audit log table
 
-## Phase 2 — Catalog
-- [ ] Category tree in the database, seed data
-- [ ] Products with variants (SKU, price in pesewas, compare-at price, stock), image upload
-- [ ] Product detail, category and seller store pages, server-rendered, with SEO metadata, JSON-LD and sitemap
-- [ ] Search (Postgres full-text + trigram), filters (category, price, rating), sorting
-- [ ] Seller dashboard: products and inventory, low-stock flags
+## Phase 2 — Catalog ✅ (built 2026-11-18; rating filter waits for reviews in Phase 7)
+- [x] Category tree in the database (admin-managed, 3 levels, attributes, seller suggestions), launch categories seeded
+- [x] Products with variants (SKU, price in pesewas, compare-at price, stock), image upload
+- [x] Product detail, category and seller store pages, server-rendered, with SEO metadata, JSON-LD and sitemap
+- [x] Search (Postgres full-text + trigram), filters (category, price, attributes), sorting
+- [x] Seller dashboard: products and inventory, low-stock flags; admin product moderation
 
 ## Phase 3 — Cart and checkout
 - [ ] Cart for guests (cookie) merged into the account on login
@@ -70,3 +70,4 @@ The rebuild happens on the `rebuild/nextjs` branch. Each phase ends in a working
 - **2026-09-29** — Plan agreed in principle: rebuild on TutorLane's stack, vetted B2C marketplace with escrow-style payouts, Ghana/GHS first, Flutter app after the web core. Awaiting go-ahead on this plan.
 - **2026-10-20** — Phase 0 done: the old app is replaced by a Next.js storefront shell (home page, error pages, health checks) with a database, tests on desktop and mobile sizes, and CI. Next: Phase 1, accounts and seller applications.
 - **2026-11-02** — Phase 1 done: people can create accounts (email confirmation, password reset, Google once configured), save delivery addresses, and apply to sell; admins review applications, see the Ghana Card privately, and approval creates the store. Next: Phase 2, the catalog.
+- **2026-11-18** — Phase 2 done: admins manage categories and their filters from the website; sellers list products with photos, sizes/colours and stock; shoppers browse, filter and search; admins can take listings down. Also fixed Ghana Card uploads over 1 MB. Next: Phase 3, cart and checkout (needs the delivery fees).

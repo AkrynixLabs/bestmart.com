@@ -42,3 +42,6 @@ notes/
 
 # Local dev data (email outbox, private uploads)
 .data
+
+# Personal Claude Code settings
+.claude/settings.local.json

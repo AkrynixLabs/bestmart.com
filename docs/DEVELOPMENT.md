@@ -9,7 +9,8 @@ Without service keys, development falls back to local stand-ins (never in produc
 | Service | Without a key |
 |---|---|
 | Resend (email) | Emails are written as JSON to `.data/outbox/`; open the newest file to click a verification or reset link |
-| Vercel Blob (KYC files) | Files are stored in `.data/private/` |
+| Vercel Blob, private store (KYC files) | Files are stored in `.data/private/` |
+| Vercel Blob, public store (product photos) | Files are stored in `.data/public/` and served at `/media/*` |
 | Upstash (rate limits) | In-memory limits, per server process |
 | Google sign-in | The button is hidden |
 
@@ -37,6 +38,7 @@ npm run db:studio                                # browse data
 ```
 
 - Never edit a migration that has already been applied anywhere; add a new one.
+- To write a migration without `migrate dev`: `npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --script > prisma/migrations/<timestamp>_<name>/migration.sql`, append hand-written SQL, and check there are no unexpected `DROP`s. Test the chain on a scratch database and confirm the diff against it is empty.
 - Hand-written SQL (constraints, seed rows Prisma can't express) goes in its own migration.
 - Money columns are `Int` pesewas; percentage columns are `Int` basis points.
 
